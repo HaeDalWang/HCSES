@@ -80,6 +80,29 @@ hcses/
 - 멱등성 보장 (DynamoDB ConditionExpression)
 - 절대값(`_value`) vs 변동률(`_pct`) 변수명 규칙 (EC-02)
 
+## 예상 월간 AWS 비용 (프리티어 미적용)
+
+ap-northeast-2 (서울) 기준, 50종목 운영 시 예상 비용입니다.
+
+| 서비스 | 산출 근거 | 월 예상 비용 |
+|---|---|---|
+| Lambda (DataCollector KR/US) | 2회/일 × 30일 × 512MB × 480초 | $0.60 |
+| Lambda (QuantAnalyzer KR/US) | 20회/일 × 22일 × 256MB × 180초 | $0.85 |
+| Lambda (AlertingEngine) | ~2회/월 × 128MB × 5초 | $0.00 |
+| Lambda (StatsUpdater) | 4회/월 × 256MB × 300초 | $0.01 |
+| Lambda 요청 비용 | ~700회/월 × $0.20/1M | $0.00 |
+| DynamoDB 쓰기 | ~3,000 WCU/월 × $1.4846/100만 WCU | $0.01 |
+| DynamoDB 읽기 | ~50,000 RCU/월 × $0.2969/100만 RCU | $0.02 |
+| DynamoDB 스토리지 | ~0.5GB × $0.2969/GB | $0.15 |
+| EventBridge | ~700 이벤트/월 (무료 한도 내) | $0.00 |
+| Secrets Manager | 1 시크릿 × $0.40 + ~20 API 호출 | $0.40 |
+| CloudWatch Logs 수집 | ~500MB × $0.76/GB | $0.38 |
+| CloudWatch Logs 보관 | ~1.5GB × $0.0314/GB (90일) | $0.05 |
+| **합계** | | **~$2.47/월** |
+
+> 종목 수 증가 시 Lambda 실행 시간과 DynamoDB I/O가 선형 증가합니다.
+> 100종목 기준 약 $4~5/월, 200종목 기준 약 $8~10/월로 추정됩니다.
+
 ## 라이선스
 
 Private — 비공개 프로젝트
