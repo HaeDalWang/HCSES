@@ -26,48 +26,43 @@ def generate_pbr_stats(ticker: str, start: str, end: str) -> StockStatsRecord | 
     5~10년 PBR 히스토리컬 데이터로 Min/Max/Median 계산.
 
     [설계 한계 및 보정 방침]
-    현재 yfinance tk.info.get("bookValue")는 현재 시점의 단일 장부가치만 제공합니다.
-    기업의 장부가치는 매년 변동하므로, 10년 전 주가를 현재 장부가치로 나눈 PBR은
-    실제 과거 PBR과 오차가 발생할 수 있습니다.
+    yfinance tk.info.get("bookValue")는 US 종목에서만 안정적으로 제공됩니다.
+    KR 종목은 bookValue가 None인 경우가 많으므로 FinanceDataReader를 우선 사용합니다.
 
     보정 방침:
-    1. pbr_min_value에 보수적 가중치(CONSERVATIVE_FACTOR=1.2) 적용:
-       실제 과거 최저 PBR보다 20% 높게 설정하여 과도한 저평가 판단 방지.
-    2. StatsUpdater(매주 토요일)가 최신 장부가치로 점진적 보정.
-    3. 향후 개선: yfinance quarterly_financials에서 연도별 BPS 추출 권장.
+    1. pbr_min_value에 보수적 가중치(CONSERVATIVE_FACTOR=1.2) 적용
+    2. StatsUpdater(매주 토요일)가 최신 장부가치로 점진적 보정
+    3. 향후 개선: yfinance quarterly_financials에서 연도별 BPS 추출 권장
     """
     try:
-        tk = yf.Ticker(ticker)
-        hist = tk.history(start=start, end=end, auto_adjust=True)
-        if hist.empty:
-            return None
+        pbr_series = None
 
-        info = tk.info
-        book_value = info.get("bookValue")
-        if not book_value or float(book_value) <= 0:
-            logger.warning(f"book_value_missing ticker={ticker}")
-            return None
+        # KR 종목: FinanceDataReader 우선 시도
+        if ticker.endswith(".KS") or ticker.endswith(".KQ"):
+            pbr_series = _get_pbr_from_fdr(ticker, start, end)
 
-        pbr_series = (hist["Close"] / float(book_value)).dropna()
-        if pbr_series.empty:
+        # US 종목 또는 FDR 실패 시: yfinance bookValue 기반 근사
+        if pbr_series is None or pbr_series.empty:
+            pbr_series = _get_pbr_from_yfinance(ticker, start, end)
+
+        if pbr_series is None or pbr_series.empty:
+            logger.warning(f"pbr_data_unavailable ticker={ticker}")
             return None
 
         raw_min = float(pbr_series.min())
-        # 보수적 가중치 적용: 현재 장부가치 기반 계산의 한계 보정
         conservative_min = round(raw_min * CONSERVATIVE_FACTOR, 4)
 
         logger.info(
             f"pbr_stats_generated ticker={ticker} "
             f"raw_min={round(raw_min, 4)} "
             f"conservative_min={conservative_min} "
-            f"factor={CONSERVATIVE_FACTOR} "
-            f"note=current_book_value_approximation"
+            f"factor={CONSERVATIVE_FACTOR}"
         )
 
         return StockStatsRecord(
             ticker=ticker,
             stat_type="PBR_STATS",
-            pbr_min_value=conservative_min,          # 보수적 가중치 적용
+            pbr_min_value=conservative_min,
             pbr_max_value=round(float(pbr_series.max()), 4),
             pbr_median_value=round(float(pbr_series.median()), 4),
             years_of_data=SEED_YEARS,
@@ -75,6 +70,63 @@ def generate_pbr_stats(ticker: str, start: str, end: str) -> StockStatsRecord | 
         )
     except Exception as e:
         logger.error(f"pbr_stats_generation_failed ticker={ticker} error={str(e)}")
+        return None
+
+
+def _get_pbr_from_fdr(ticker: str, start: str, end: str):
+    """
+    yfinance balance sheet에서 BPS를 직접 계산하여 PBR 시계열 생성.
+    KR 종목은 priceToBook/bookValue가 None이므로 이 방식을 사용.
+    BPS = Stockholders Equity / Ordinary Shares Number
+    PBR = Close / BPS
+    """
+    try:
+        tk = yf.Ticker(ticker)
+        bs = tk.quarterly_balance_sheet
+        if bs is None or bs.empty:
+            return None
+
+        # 최신 분기 재무제표에서 BPS 계산
+        if "Stockholders Equity" not in bs.index or "Ordinary Shares Number" not in bs.index:
+            return None
+
+        equity = bs.loc["Stockholders Equity"].iloc[0]
+        shares = bs.loc["Ordinary Shares Number"].iloc[0]
+        if not equity or not shares or float(shares) <= 0:
+            return None
+
+        bps = float(equity) / float(shares)
+        if bps <= 0:
+            return None
+
+        # 히스토리컬 주가 로드
+        hist = tk.history(start=start, end=end, auto_adjust=True)
+        if hist.empty:
+            return None
+
+        pbr_series = (hist["Close"] / bps).dropna().round(4)
+        logger.info(f"pbr_from_balance_sheet ticker={ticker} bps={bps:.0f} latest_pbr={pbr_series.iloc[-1]:.4f}")
+        return pbr_series
+    except Exception as e:
+        logger.warning(f"fdr_pbr_stats_failed ticker={ticker} error={str(e)}")
+        return None
+
+
+def _get_pbr_from_yfinance(ticker: str, start: str, end: str):
+    """yfinance bookValue 기반 PBR 시계열 근사 (US 종목 전용)"""
+    try:
+        tk = yf.Ticker(ticker)
+        hist = tk.history(start=start, end=end, auto_adjust=True)
+        if hist.empty:
+            return None
+        info = tk.info
+        book_value = info.get("bookValue")
+        if not book_value or float(book_value) <= 0:
+            return None
+        pbr_series = (hist["Close"] / float(book_value)).dropna().round(4)
+        return pbr_series
+    except Exception as e:
+        logger.warning(f"yf_pbr_stats_failed ticker={ticker} error={str(e)}")
         return None
 
 

@@ -4,6 +4,7 @@ TC-01: 멱등성 쓰기 헬퍼 포함
 """
 import os
 import logging
+from decimal import Decimal
 from datetime import datetime, timedelta
 from typing import Optional
 import boto3
@@ -13,6 +14,17 @@ from botocore.exceptions import ClientError
 from src.shared.models import StockDailyRecord, MarketIndicatorRecord, StockStatsRecord
 
 logger = logging.getLogger(__name__)
+
+
+def _to_dynamodb_item(d: dict) -> dict:
+    """float → Decimal 변환. DynamoDB는 Python float을 거부함."""
+    converted = {}
+    for k, v in d.items():
+        if isinstance(v, float):
+            converted[k] = Decimal(str(v))
+        elif v is not None:
+            converted[k] = v
+    return converted
 
 _dynamodb = None
 
@@ -34,7 +46,7 @@ def save_stock_daily(record: StockDailyRecord, table_name: str) -> bool:
     FAILED 레코드는 재시도 허용 (UpdateItem).
     """
     table = get_dynamodb().Table(table_name)
-    item = {k: v for k, v in record.__dict__.items() if v is not None}
+    item = _to_dynamodb_item({k: v for k, v in record.__dict__.items() if v is not None})
     item["ttl"] = calc_ttl(180)
 
     try:
@@ -75,7 +87,7 @@ def update_analysis_status(ticker: str, date: str, table_name: str) -> None:
 
 def save_market_indicator(record: MarketIndicatorRecord, table_name: str) -> bool:
     table = get_dynamodb().Table(table_name)
-    item = {k: v for k, v in record.__dict__.items() if v is not None}
+    item = _to_dynamodb_item({k: v for k, v in record.__dict__.items() if v is not None})
     item["ttl"] = calc_ttl(180)
     try:
         table.put_item(Item=item)
@@ -101,7 +113,7 @@ def get_latest_complete_record(ticker: str, date: str, table_name: str) -> Optio
 
 def save_stock_stats(record: StockStatsRecord, table_name: str) -> bool:
     table = get_dynamodb().Table(table_name)
-    item = {k: v for k, v in record.__dict__.items() if v is not None}
+    item = _to_dynamodb_item({k: v for k, v in record.__dict__.items() if v is not None})
     try:
         table.put_item(Item=item)
         return True

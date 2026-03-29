@@ -48,14 +48,14 @@ def _fetch_pbr_history_fdr(ticker: str, start: str, end: str) -> Optional[pd.Ser
         code = ticker.replace(".KS", "").replace(".KQ", "")
         cache_dir = os.path.expanduser("~/.fdr_cache")
         os.makedirs(cache_dir, exist_ok=True)
-        cache_path = os.path.join(cache_dir, f"{code}_pbr.parquet")
+        cache_path = os.path.join(cache_dir, f"{code}_pbr.csv")
 
         if os.path.exists(cache_path):
-            df = pd.read_parquet(cache_path)
+            df = pd.read_csv(cache_path, index_col=0, parse_dates=True)
         else:
             df = fdr.DataReader(code, start, end)
             if not df.empty:
-                df.to_parquet(cache_path)
+                df.to_csv(cache_path)
 
         if not df.empty and "PBR" in df.columns:
             return df["PBR"].dropna()
