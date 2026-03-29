@@ -1,0 +1,261 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: HCSES - High-Confidence Stock Entry Scanner
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Environment:
+      Variables:
+        STOCK_DAILY_TABLE: !Ref StockDailyTable
+        STOCK_STATS_TABLE: !Ref StockStatsTable
+        MARKET_INDICATOR_TABLE: !Ref MarketIndicatorTable
+
+Resources:
+
+# ── Unit 1: DataCollector ─────────────────────────────────────────────────────
+  DataCollectorKR:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: hcses-data-collector-kr
+      CodeUri: .
+      Handler: src/data_collector/handler.handler
+      MemorySize: 512
+      Timeout: 900
+      Environment:
+        Variables:
+          MARKET: KR
+      Events:
+        KRSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(30 7 ? * MON-FRI *)
+            Input: '{"market": "KR"}'
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StockDailyTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MarketIndicatorTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StockStatsTable
+
+  DataCollectorUS:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: hcses-data-collector-us
+      CodeUri: .
+      Handler: src/data_collector/handler.handler
+      MemorySize: 512
+      Timeout: 900
+      Environment:
+        Variables:
+          MARKET: US
+      Events:
+        USScheduleEDT:
+          Type: Schedule
+          Properties:
+            Schedule: cron(30 21 ? * MON-FRI *)
+            Input: '{"market": "US"}'
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StockDailyTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MarketIndicatorTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StockStatsTable
+
+  StatsUpdaterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: hcses-stats-updater
+      CodeUri: .
+      Handler: src/stats_updater/handler.handler
+      MemorySize: 256
+      Timeout: 300
+      Events:
+        WeeklySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 0 ? * SAT *)
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref StockStatsTable
+
+# ── DynamoDB Tables ───────────────────────────────────────────────────────────
+  StockDailyTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: hcses-stock-daily
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: ticker
+          AttributeType: S
+        - AttributeName: date
+          AttributeType: S
+        - AttributeName: data_status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ticker
+          KeyType: HASH
+        - AttributeName: date
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: StatusDateIndex
+          KeySchema:
+            - AttributeName: data_status
+              KeyType: HASH
+            - AttributeName: date
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  StockStatsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: hcses-stock-stats
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: ticker
+          AttributeType: S
+        - AttributeName: stat_type
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ticker
+          KeyType: HASH
+        - AttributeName: stat_type
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+
+  MarketIndicatorTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: hcses-market-indicator
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: indicator
+          AttributeType: S
+        - AttributeName: date
+          AttributeType: S
+      KeySchema:
+        - AttributeName: indicator
+          KeyType: HASH
+        - AttributeName: date
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+# ── Unit 2: QuantAnalyzer ─────────────────────────────────────────────────────
+  QuantAnalyzerKR:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: hcses-quant-analyzer-kr
+      CodeUri: .
+      Handler: src/quant_analyzer/handler.handler
+      MemorySize: 256
+      Timeout: 300
+      Environment:
+        Variables:
+          MARKET: KR
+          ALERTING_ENGINE_ARN: !GetAtt AlertingEngineFunction.Arn
+      Events:
+        KROpen:     { Type: Schedule, Properties: { Schedule: "cron(0 0 ? * MON-FRI *)",  Input: '{"market":"KR"}' } }
+        KRMid1:     { Type: Schedule, Properties: { Schedule: "cron(30 0 ? * MON-FRI *)", Input: '{"market":"KR"}' } }
+        KRMid2:     { Type: Schedule, Properties: { Schedule: "cron(0 1 ? * MON-FRI *)",  Input: '{"market":"KR"}' } }
+        KRMid3:     { Type: Schedule, Properties: { Schedule: "cron(0 2 ? * MON-FRI *)",  Input: '{"market":"KR"}' } }
+        KRMid4:     { Type: Schedule, Properties: { Schedule: "cron(0 3 ? * MON-FRI *)",  Input: '{"market":"KR"}' } }
+        KRMid5:     { Type: Schedule, Properties: { Schedule: "cron(0 4 ? * MON-FRI *)",  Input: '{"market":"KR"}' } }
+        KRMid6:     { Type: Schedule, Properties: { Schedule: "cron(0 5 ? * MON-FRI *)",  Input: '{"market":"KR"}' } }
+        KRMid7:     { Type: Schedule, Properties: { Schedule: "cron(30 5 ? * MON-FRI *)", Input: '{"market":"KR"}' } }
+        KRMid8:     { Type: Schedule, Properties: { Schedule: "cron(0 6 ? * MON-FRI *)",  Input: '{"market":"KR"}' } }
+        KRClose:    { Type: Schedule, Properties: { Schedule: "cron(20 6 ? * MON-FRI *)", Input: '{"market":"KR"}' } }
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref StockDailyTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref StockStatsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref MarketIndicatorTable
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:UpdateItem
+              Resource: !GetAtt StockDailyTable.Arn
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt AlertingEngineFunction.Arn
+
+  QuantAnalyzerUS:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: hcses-quant-analyzer-us
+      CodeUri: .
+      Handler: src/quant_analyzer/handler.handler
+      MemorySize: 256
+      Timeout: 300
+      Environment:
+        Variables:
+          MARKET: US
+          ALERTING_ENGINE_ARN: !GetAtt AlertingEngineFunction.Arn
+      Events:
+        USOpen:     { Type: Schedule, Properties: { Schedule: "cron(30 13 ? * MON-FRI *)", Input: '{"market":"US"}' } }
+        USMid1:     { Type: Schedule, Properties: { Schedule: "cron(0 14 ? * MON-FRI *)",  Input: '{"market":"US"}' } }
+        USMid2:     { Type: Schedule, Properties: { Schedule: "cron(0 15 ? * MON-FRI *)",  Input: '{"market":"US"}' } }
+        USMid3:     { Type: Schedule, Properties: { Schedule: "cron(0 16 ? * MON-FRI *)",  Input: '{"market":"US"}' } }
+        USMid4:     { Type: Schedule, Properties: { Schedule: "cron(0 17 ? * MON-FRI *)",  Input: '{"market":"US"}' } }
+        USMid5:     { Type: Schedule, Properties: { Schedule: "cron(0 18 ? * MON-FRI *)",  Input: '{"market":"US"}' } }
+        USMid6:     { Type: Schedule, Properties: { Schedule: "cron(0 19 ? * MON-FRI *)",  Input: '{"market":"US"}' } }
+        USMid7:     { Type: Schedule, Properties: { Schedule: "cron(30 19 ? * MON-FRI *)", Input: '{"market":"US"}' } }
+        USPreClose: { Type: Schedule, Properties: { Schedule: "cron(55 19 ? * MON-FRI *)", Input: '{"market":"US"}' } }
+        USClose:    { Type: Schedule, Properties: { Schedule: "cron(0 20 ? * MON-FRI *)",  Input: '{"market":"US"}' } }
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref StockDailyTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref StockStatsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref MarketIndicatorTable
+        - Statement:
+            - Effect: Allow
+              Action: dynamodb:UpdateItem
+              Resource: !GetAtt StockDailyTable.Arn
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt AlertingEngineFunction.Arn
+
+# ── Unit 3: AlertingEngine ────────────────────────────────────────────────────
+  AlertingEngineFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: hcses-alerting-engine
+      CodeUri: .
+      Handler: src/alerting_engine/handler.handler
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DISCORD_SECRET_NAME: hcses/discord-webhook-url
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:hcses/discord-webhook-url*"
+
+Outputs:
+  StockDailyTableName:
+    Value: !Ref StockDailyTable
+  StockStatsTableName:
+    Value: !Ref StockStatsTable
+  MarketIndicatorTableName:
+    Value: !Ref MarketIndicatorTable
+  AlertingEngineArn:
+    Value: !GetAtt AlertingEngineFunction.Arn
