@@ -250,6 +250,170 @@ Resources:
               Action: secretsmanager:GetSecretValue
               Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:hcses/discord-webhook-url*"
 
+# ── CloudWatch Dashboard ──────────────────────────────────────────────────────
+  HCSESDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: HCSES-Monitor
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "text",
+              "x": 0, "y": 0, "width": 24, "height": 1,
+              "properties": { "markdown": "# HCSES Dashboard — High-Confidence Stock Entry Scanner" }
+            },
+            {
+              "type": "metric",
+              "x": 0, "y": 1, "width": 12, "height": 6,
+              "properties": {
+                "title": "Lambda 실행 시간 (Duration)",
+                "metrics": [
+                  ["AWS/Lambda", "Duration", "FunctionName", "hcses-data-collector-kr", {"stat": "Average", "label": "DC-KR"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "hcses-data-collector-us", {"stat": "Average", "label": "DC-US"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "hcses-quant-analyzer-kr", {"stat": "Average", "label": "QA-KR"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "hcses-quant-analyzer-us", {"stat": "Average", "label": "QA-US"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "hcses-alerting-engine", {"stat": "Average", "label": "Alert"}]
+                ],
+                "period": 86400,
+                "region": "${AWS::Region}",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12, "y": 1, "width": 12, "height": 6,
+              "properties": {
+                "title": "Lambda 에러 수 (Errors)",
+                "metrics": [
+                  ["AWS/Lambda", "Errors", "FunctionName", "hcses-data-collector-kr", {"stat": "Sum", "label": "DC-KR"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "hcses-data-collector-us", {"stat": "Sum", "label": "DC-US"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "hcses-quant-analyzer-kr", {"stat": "Sum", "label": "QA-KR"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "hcses-quant-analyzer-us", {"stat": "Sum", "label": "QA-US"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "hcses-alerting-engine", {"stat": "Sum", "label": "Alert"}]
+                ],
+                "period": 86400,
+                "region": "${AWS::Region}",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0, "y": 7, "width": 12, "height": 6,
+              "properties": {
+                "title": "Lambda 호출 수 (Invocations)",
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", "FunctionName", "hcses-data-collector-kr", {"stat": "Sum", "label": "DC-KR"}],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "hcses-data-collector-us", {"stat": "Sum", "label": "DC-US"}],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "hcses-quant-analyzer-kr", {"stat": "Sum", "label": "QA-KR"}],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "hcses-quant-analyzer-us", {"stat": "Sum", "label": "QA-US"}],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "hcses-alerting-engine", {"stat": "Sum", "label": "Alert"}]
+                ],
+                "period": 86400,
+                "region": "${AWS::Region}",
+                "view": "bar"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12, "y": 7, "width": 12, "height": 6,
+              "properties": {
+                "title": "Lambda Throttles",
+                "metrics": [
+                  ["AWS/Lambda", "Throttles", "FunctionName", "hcses-data-collector-kr", {"stat": "Sum", "label": "DC-KR"}],
+                  ["AWS/Lambda", "Throttles", "FunctionName", "hcses-quant-analyzer-kr", {"stat": "Sum", "label": "QA-KR"}],
+                  ["AWS/Lambda", "Throttles", "FunctionName", "hcses-alerting-engine", {"stat": "Sum", "label": "Alert"}]
+                ],
+                "period": 86400,
+                "region": "${AWS::Region}",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0, "y": 13, "width": 8, "height": 6,
+              "properties": {
+                "title": "DynamoDB StockDaily 읽기/쓰기",
+                "metrics": [
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "hcses-stock-daily", {"stat": "Sum", "label": "Read"}],
+                  ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "hcses-stock-daily", {"stat": "Sum", "label": "Write"}]
+                ],
+                "period": 86400,
+                "region": "${AWS::Region}",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 8, "y": 13, "width": 8, "height": 6,
+              "properties": {
+                "title": "DynamoDB StockStats 읽기/쓰기",
+                "metrics": [
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "hcses-stock-stats", {"stat": "Sum", "label": "Read"}],
+                  ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "hcses-stock-stats", {"stat": "Sum", "label": "Write"}]
+                ],
+                "period": 86400,
+                "region": "${AWS::Region}",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 16, "y": 13, "width": 8, "height": 6,
+              "properties": {
+                "title": "DynamoDB MarketIndicator 읽기/쓰기",
+                "metrics": [
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "hcses-market-indicator", {"stat": "Sum", "label": "Read"}],
+                  ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "hcses-market-indicator", {"stat": "Sum", "label": "Write"}]
+                ],
+                "period": 86400,
+                "region": "${AWS::Region}",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "log",
+              "x": 0, "y": 19, "width": 12, "height": 6,
+              "properties": {
+                "title": "Kill-Switch 발동 이력",
+                "query": "SOURCE '/aws/lambda/hcses-quant-analyzer-kr' | SOURCE '/aws/lambda/hcses-quant-analyzer-us' | fields @timestamp, @message | filter @message like /kill_switch_active/ | sort @timestamp desc | limit 20",
+                "region": "${AWS::Region}",
+                "view": "table"
+              }
+            },
+            {
+              "type": "log",
+              "x": 12, "y": 19, "width": 12, "height": 6,
+              "properties": {
+                "title": "알람 발송 이력",
+                "query": "SOURCE '/aws/lambda/hcses-alerting-engine' | fields @timestamp, @message | filter @message like /alert_sent/ or @message like /alert_failed/ | sort @timestamp desc | limit 20",
+                "region": "${AWS::Region}",
+                "view": "table"
+              }
+            },
+            {
+              "type": "log",
+              "x": 0, "y": 25, "width": 12, "height": 6,
+              "properties": {
+                "title": "PBR 결측 경고",
+                "query": "SOURCE '/aws/lambda/hcses-data-collector-kr' | fields @timestamp, @message | filter @message like /pbr_missing/ | sort @timestamp desc | limit 20",
+                "region": "${AWS::Region}",
+                "view": "table"
+              }
+            },
+            {
+              "type": "log",
+              "x": 12, "y": 25, "width": 12, "height": 6,
+              "properties": {
+                "title": "Stale 지표 사용 이력",
+                "query": "SOURCE '/aws/lambda/hcses-quant-analyzer-kr' | SOURCE '/aws/lambda/hcses-quant-analyzer-us' | fields @timestamp, @message | filter @message like /stale_indicator_used/ | sort @timestamp desc | limit 20",
+                "region": "${AWS::Region}",
+                "view": "table"
+              }
+            }
+          ]
+        }
+
 Outputs:
   StockDailyTableName:
     Value: !Ref StockDailyTable

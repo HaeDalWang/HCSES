@@ -25,14 +25,14 @@ def generate_pbr_stats(ticker: str, start: str, end: str) -> StockStatsRecord | 
     """
     5~10년 PBR 히스토리컬 데이터로 Min/Max/Median 계산.
 
-    [설계 한계 및 보정 방침]
-    yfinance tk.info.get("bookValue")는 US 종목에서만 안정적으로 제공됩니다.
-    KR 종목은 bookValue가 None인 경우가 많으므로 FinanceDataReader를 우선 사용합니다.
+    [BPS 계산 방식]
+    KR 종목: yfinance quarterly_balance_sheet에서 BPS 직접 계산
+             (Stockholders Equity / Ordinary Shares Number)
+    US 종목: yfinance tk.info.bookValue 기반 근사
 
     보정 방침:
     1. pbr_min_value에 보수적 가중치(CONSERVATIVE_FACTOR=1.2) 적용
     2. StatsUpdater(매주 토요일)가 최신 장부가치로 점진적 보정
-    3. 향후 개선: yfinance quarterly_financials에서 연도별 BPS 추출 권장
     """
     try:
         pbr_series = None
