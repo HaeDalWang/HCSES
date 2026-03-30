@@ -47,10 +47,29 @@ def calc_stop_loss_price(
     pbr_value: Optional[float],
     market: str = "KR",
 ) -> str:
-    """BR-02: 손절가 = 현재가 × (PBR Min / 현재 PBR)"""
+    """손절가 = 현재가 × (PBR Min / 현재 PBR) — 레거시, ATR 방식으로 대체됨"""
     if not pbr_value or pbr_value == 0 or pbr_min_value is None:
         return "N/A"
     raw = current_price_value * (pbr_min_value / pbr_value)
+    return _format_price(raw, market)
+
+
+def calc_stop_loss_atr(
+    current_price_value: float,
+    atr_value: Optional[float],
+    market: str = "KR",
+    multiplier: float = 1.5,
+) -> str:
+    """
+    손절가 = 현재가 - (ATR(14) × 1.5)
+    ATR 없으면 N/A (보수적 원칙).
+    multiplier=1.5: 노이즈 대비 충분한 버퍼, 과도한 손실 방지 균형점.
+    """
+    if atr_value is None or atr_value <= 0:
+        return "N/A"
+    raw = current_price_value - (atr_value * multiplier)
+    if raw <= 0:
+        return "N/A"
     return _format_price(raw, market)
 
 
@@ -93,7 +112,7 @@ def format_alert_message(
         "━━━━━━━━━━━━━━━━━━━━",
         f"현재가:   {currency}{price_fmt}",
         f"목표가:   {currency}{target_price_str}  ({target_pct})",
-        f"손절가:   {currency}{stop_loss_price_str}  ({stop_pct})",
+        f"손절가:   {currency}{stop_loss_price_str}  ({stop_pct})  [ATR×1.5]",
         "━━━━━━━━━━━━━━━━━━━━",
         f"📊 스코어: {breakdown.get('total_score', 0)} / 100",
         f"  • Valuation Floor: {breakdown.get('valuation_score', 0)}점",
@@ -105,6 +124,8 @@ def format_alert_message(
         "━━━━━━━━━━━━━━━━━━━━",
         f"📅 {date}",
     ]
+    if market == "KR":
+        lines.append("※ 한국 시장 수급 지표는 전일 마감 기준")
     return "\n".join(lines)
 
 

@@ -9,7 +9,7 @@ from datetime import datetime
 
 from src.alerting_engine.alert_service import (
     calc_target_price,
-    calc_stop_loss_price,
+    calc_stop_loss_atr,
     format_alert_message,
     truncate_if_needed,
     send_discord_alert,
@@ -55,11 +55,14 @@ def _run(event: dict, context) -> dict:
     current_price_value = float(event.get("current_price_value") or 0)
     pbr_value = breakdown.get("pbr_value") or event.get("pbr_value")
     pbr_median_value = event.get("pbr_median_value")
-    pbr_min_value = event.get("pbr_min_value")
+    atr_value = event.get("atr_value")
 
-    # BR-02: 목표가 / 손절가
+    # 목표가: PBR Median 기반 (유지)
     target_price_str = calc_target_price(current_price_value, pbr_median_value, pbr_value, market)
-    stop_loss_price_str = calc_stop_loss_price(current_price_value, pbr_min_value, pbr_value, market)
+
+    # 손절가: ATR(14) 기반 — 현재가 - 1.5 × ATR
+    # ATR 없으면 N/A (보수적 원칙)
+    stop_loss_price_str = calc_stop_loss_atr(current_price_value, atr_value, market)
 
     # BR-01: 메시지 포맷
     message = format_alert_message(

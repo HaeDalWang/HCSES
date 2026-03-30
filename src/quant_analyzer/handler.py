@@ -103,7 +103,7 @@ def _run(event: dict, context) -> dict:
                 continue
 
             stats = get_stock_stats(ticker)
-            ctx = build_scoring_context(record, stats, ticker, market, today)
+            ctx, atr_value = build_scoring_context(record, stats, ticker, market, today)
             breakdown = calculate_total_score(ctx, market, kill_switch)
 
             _log("info", "analysis_complete", ticker=ticker, market=market,
@@ -122,6 +122,7 @@ def _run(event: dict, context) -> dict:
                     "current_price_value": ctx.close_value,
                     "pbr_min_value": ctx.pbr_min_value,
                     "pbr_median_value": stats.get("pbr_median_value") if stats else None,
+                    "atr_value": atr_value,
                 })
                 if alert_ok:
                     # 알람 발송 성공 후에만 DONE 처리
