@@ -17,7 +17,7 @@ from src.quant_analyzer.scoring_service import (
 from src.shared import dynamodb_client as db
 from src.shared.market_calendar import is_within_market_hours, is_market_holiday
 from src.shared.scoring import evaluate_kill_switch, calculate_total_score, ALERT_THRESHOLD
-from src.data_collector.handler import TICKER_LIST
+from src.data_collector.handler import TICKER_LIST, TICKER_NAMES
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -115,6 +115,7 @@ def _run(event: dict, context) -> dict:
             if breakdown.total_score >= ALERT_THRESHOLD:
                 alert_ok = _invoke_alerting_engine({
                     "ticker": ticker,
+                    "ticker_name": TICKER_NAMES.get(ticker, ticker),
                     "market": market,
                     "date": today.isoformat(),
                     "breakdown": breakdown.__dict__,

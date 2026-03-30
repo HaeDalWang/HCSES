@@ -72,6 +72,10 @@ hcses/
 
 [user-guide.md](user-guide.md) 참조 — 사전 준비부터 배포, 수동 Invoke 테스트, CloudWatch 확인까지 Step-by-Step 가이드.
 
+## 모니터링 종목
+
+[TICKERS.md](TICKERS.md) 참조 — KR 11종목 + US 11종목, 편입 사유 및 종목 추가 방법.
+
 ## 설계 원칙
 
 - 조건이 하나라도 모호하면 True가 아닌 False를 반환 (보수적 원칙)

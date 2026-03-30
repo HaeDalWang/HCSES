@@ -26,8 +26,57 @@ MARKET_INDICATOR_TABLE = os.environ.get("MARKET_INDICATOR_TABLE", "hcses-market-
 
 # 종목 목록 (실운영 시 DynamoDB 설정 테이블 또는 환경변수로 관리)
 TICKER_LIST: dict[str, list[str]] = {
-    "KR": ["005930.KS", "000660.KS", "035420.KS", "051910.KS", "006400.KS"],
-    "US": ["AAPL", "MSFT", "GOOGL", "AMZN", "META"],
+    "KR": [
+        "005930.KS",  # 삼성전자
+        "000660.KS",  # SK하이닉스
+        "035420.KS",  # NAVER
+        "005380.KS",  # 현대차
+        "000270.KS",  # 기아
+        "105560.KS",  # KB금융
+        "010950.KS",  # S-Oil
+        "329180.KS",  # HD현대중공업
+        "005490.KS",  # POSCO홀딩스
+        "033780.KS",  # KT&G
+        "030200.KS",  # KT
+    ],
+    "US": [
+        "META",   # Meta
+        "MU",     # Micron Technology
+        "AMD",    # Advanced Micro Devices
+        "AMAT",   # Applied Materials
+        "JPM",    # JPMorgan Chase
+        "GS",     # Goldman Sachs
+        "BRK-B",  # Berkshire Hathaway
+        "XOM",    # ExxonMobil
+        "CVX",    # Chevron
+        "UNH",    # UnitedHealth Group
+        "LMT",    # Lockheed Martin
+    ],
+}
+
+TICKER_NAMES: dict[str, str] = {
+    "005930.KS": "삼성전자",
+    "000660.KS": "SK하이닉스",
+    "035420.KS": "NAVER",
+    "005380.KS": "현대차",
+    "000270.KS": "기아",
+    "105560.KS": "KB금융",
+    "010950.KS": "S-Oil",
+    "329180.KS": "HD현대중공업",
+    "005490.KS": "POSCO홀딩스",
+    "033780.KS": "KT&G",
+    "030200.KS": "KT",
+    "META":  "Meta",
+    "MU":    "Micron Technology",
+    "AMD":   "Advanced Micro Devices",
+    "AMAT":  "Applied Materials",
+    "JPM":   "JPMorgan Chase",
+    "GS":    "Goldman Sachs",
+    "BRK-B": "Berkshire Hathaway",
+    "XOM":   "ExxonMobil",
+    "CVX":   "Chevron",
+    "UNH":   "UnitedHealth Group",
+    "LMT":   "Lockheed Martin",
 }
 
 

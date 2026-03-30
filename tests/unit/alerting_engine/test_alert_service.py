@@ -76,12 +76,13 @@ def _sample_breakdown():
 
 def test_format_message_contains_required_fields():
     msg = format_alert_message(
-        ticker="005930.KS", market="KR", date="2026-03-29",
+        ticker="005930.KS", ticker_name="삼성전자", market="KR", date="2026-03-29",
         current_price_value=75000.0,
         target_price_str="92,000", stop_loss_price_str="61,000",
         breakdown=_sample_breakdown(),
     )
     assert "005930.KS" in msg
+    assert "삼성전자" in msg
     assert "75,000" in msg
     assert "92,000" in msg
     assert "61,000" in msg
@@ -90,13 +91,14 @@ def test_format_message_contains_required_fields():
 
 
 def test_format_message_kr_currency():
-    msg = format_alert_message("T", "KR", "2026-01-01", 50000.0, "60,000", "40,000", _sample_breakdown())
+    msg = format_alert_message("T", "테스트", "KR", "2026-01-01", 50000.0, "60,000", "40,000", _sample_breakdown())
     assert "₩" in msg
 
 
 def test_format_message_us_currency():
-    msg = format_alert_message("AAPL", "US", "2026-01-01", 150.0, "180", "120", _sample_breakdown())
+    msg = format_alert_message("AAPL", "Apple", "US", "2026-01-01", 150.0, "180", "120", _sample_breakdown())
     assert "$" in msg
+    assert "Apple" in msg
 
 
 # ── 2,000자 제한 ──────────────────────────────────────────────────────────────

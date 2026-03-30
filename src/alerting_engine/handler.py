@@ -48,6 +48,7 @@ def _run(event: dict, context) -> dict:
         return {"statusCode": 500, "body": "webhook_url_missing"}
 
     ticker = event.get("ticker", "UNKNOWN")
+    ticker_name = event.get("ticker_name", ticker)
     market = event.get("market", "KR")
     date = event.get("date", datetime.utcnow().strftime("%Y-%m-%d"))
     breakdown = event.get("breakdown", {})
@@ -63,6 +64,7 @@ def _run(event: dict, context) -> dict:
     # BR-01: 메시지 포맷
     message = format_alert_message(
         ticker=ticker,
+        ticker_name=ticker_name,
         market=market,
         date=date,
         current_price_value=current_price_value,

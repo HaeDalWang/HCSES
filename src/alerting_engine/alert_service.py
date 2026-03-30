@@ -68,6 +68,7 @@ def _pct_change(current: float, target_str: str) -> str:
 
 def format_alert_message(
     ticker: str,
+    ticker_name: str,
     market: str,
     date: str,
     current_price_value: float,
@@ -84,8 +85,11 @@ def format_alert_message(
     signals = breakdown.get("signals", [])
     signals_text = "\n".join(f"  • {s}" for s in signals) if signals else "  • (없음)"
 
+    # 종목명과 티커를 함께 표시 (KR: "삼성전자 (005930.KS)", US: "Apple (AAPL)")
+    title = f"{ticker_name} ({ticker})" if ticker_name != ticker else ticker
+
     lines = [
-        f"🚨 [HCSES 알람] {ticker} ({market})",
+        f"🚨 [HCSES 알람] {title} · {market}",
         "━━━━━━━━━━━━━━━━━━━━",
         f"현재가:   {currency}{price_fmt}",
         f"목표가:   {currency}{target_price_str}  ({target_pct})",
