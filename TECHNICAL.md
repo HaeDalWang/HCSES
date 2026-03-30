@@ -99,7 +99,7 @@ US 시장: Valuation(60) + Momentum(40)                     = 100점
 
 where:
   current_PBR = 현재 주가 / BPS
-  Min_PBR     = StockStatsTable의 pbr_min_value (CONSERVATIVE_FACTOR=1.2 적용)
+  Min_PBR     = StockStatsTable의 pbr_min_value (순수 원본 값, 팩터 미적용)
   BPS         = Stockholders_Equity / Ordinary_Shares_Number
 
 충족 시: KR=40점, US=60점
@@ -205,14 +205,25 @@ BPS = Stockholders_Equity / Ordinary_Shares_Number
 
 PBR_historical[t] = Close[t] / BPS
 
-pbr_min_value = min(PBR_historical) × CONSERVATIVE_FACTOR(1.2)
+pbr_min_value = min(PBR_historical)     ← 순수 원본 값 저장
 pbr_max_value = max(PBR_historical)
 pbr_median_value = median(PBR_historical)
 
+[임계값 적용 원칙]
+StockStatsTable에는 역사적 최저 PBR 원본 값만 저장.
+보수적 임계값 평가는 scoring.py의 단일 로직에서만 적용:
+  current_PBR <= pbr_min_value × 1.1
+
 [설계 한계]
 현재 BPS는 최신 분기 재무제표 기준 단일 값.
-과거 BPS 변동은 반영되지 않으므로 CONSERVATIVE_FACTOR로 보정.
+과거 BPS 변동은 반영되지 않음.
 StatsUpdater가 매주 토요일 최신 BPS로 점진적 보정.
+
+[어닝 시즌 리스크]
+yfinance quarterly_balance_sheet는 실적 발표일과 API 업데이트 간 시차 발생.
+분기 실적 발표로 BPS가 크게 변동하는 시즌에는 StatsUpdater 주 1회 동기화만으로
+잘못된 목표가/손절가가 산출될 수 있음.
+대응: 실적 발표 직후 StatsUpdater 수동 트리거 권장.
 ```
 
 ---

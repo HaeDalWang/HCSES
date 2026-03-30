@@ -62,7 +62,7 @@ aws lambda invoke --function-name hcses-alerting-engine \
 
 ### 검증 항목
 1. Seed Data가 StockStatsTable에 정상 저장되는지
-2. CONSERVATIVE_FACTOR=1.2 적용 확인
+2. pbr_min_value가 순수 원본 값인지 확인 (팩터 미적용)
 3. QuantAnalyzer가 Seed Data를 정상 참조하는지
 
 ### 테스트 방법

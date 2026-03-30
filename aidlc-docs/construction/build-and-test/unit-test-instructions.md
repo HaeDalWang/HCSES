@@ -46,7 +46,7 @@ PYTHONPATH=. pytest tests/unit/alerting_engine/ -v
 PYTHONPATH=. pytest tests/unit/backtesting/ -v
 ```
 - `test_backtest_runner.py` — 수익률 계산, Kill-Switch 억제, CSV 출력
-- `test_seed_migrator.py` — CONSERVATIVE_FACTOR 검증, 결측 처리
+- `test_seed_migrator.py` — 원본 값 저장 검증, 결측 처리
 
 ## 예상 결과
 - 총 테스트: 약 45개

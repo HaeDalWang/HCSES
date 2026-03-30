@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 STOCK_STATS_TABLE = os.environ.get("STOCK_STATS_TABLE", "hcses-stock-stats")
 SEED_YEARS = int(os.environ.get("STATS_YEARS", "7"))
-CONSERVATIVE_FACTOR = 1.2  # pbr_min 보수적 상향 조정 계수 (현재 장부가치 근사 오차 보정)
 
 
 def generate_pbr_stats(ticker: str, start: str, end: str) -> StockStatsRecord | None:
@@ -30,9 +29,9 @@ def generate_pbr_stats(ticker: str, start: str, end: str) -> StockStatsRecord | 
              (Stockholders Equity / Ordinary Shares Number)
     US 종목: yfinance tk.info.bookValue 기반 근사
 
-    보정 방침:
-    1. pbr_min_value에 보수적 가중치(CONSERVATIVE_FACTOR=1.2) 적용
-    2. StatsUpdater(매주 토요일)가 최신 장부가치로 점진적 보정
+    [임계값 적용 원칙]
+    StockStatsTable에는 순수한 역사적 최저 PBR 원본 값만 저장.
+    보수적 임계값 평가는 shared/scoring.py의 pbr_min_value * 1.1 로직에서만 단독 적용.
     """
     try:
         pbr_series = None
@@ -50,19 +49,17 @@ def generate_pbr_stats(ticker: str, start: str, end: str) -> StockStatsRecord | 
             return None
 
         raw_min = float(pbr_series.min())
-        conservative_min = round(raw_min * CONSERVATIVE_FACTOR, 4)
 
         logger.info(
             f"pbr_stats_generated ticker={ticker} "
-            f"raw_min={round(raw_min, 4)} "
-            f"conservative_min={conservative_min} "
-            f"factor={CONSERVATIVE_FACTOR}"
+            f"pbr_min={round(raw_min, 4)} "
+            f"note=raw_value_no_factor"
         )
 
         return StockStatsRecord(
             ticker=ticker,
             stat_type="PBR_STATS",
-            pbr_min_value=conservative_min,
+            pbr_min_value=round(raw_min, 4),
             pbr_max_value=round(float(pbr_series.max()), 4),
             pbr_median_value=round(float(pbr_series.median()), 4),
             years_of_data=SEED_YEARS,

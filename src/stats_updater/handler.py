@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 STOCK_STATS_TABLE = os.environ.get("STOCK_STATS_TABLE", "hcses-stock-stats")
 STATS_YEARS = int(os.environ.get("STATS_YEARS", "7"))  # 5~10년, 기본 7년
-CONSERVATIVE_FACTOR = 1.2  # seed_migrator와 동일 보수적 가중치
 
 
 def _log(level: str, message: str, **kwargs) -> None:
@@ -34,31 +33,50 @@ def _log(level: str, message: str, **kwargs) -> None:
 
 
 def recalculate_pbr_stats(ticker: str) -> Optional[StockStatsRecord]:
-    """최근 N년 PBR Min/Max/Median 계산"""
+    """
+    최근 N년 PBR Min/Max/Median 계산.
+    KR 종목: quarterly_balance_sheet에서 BPS 직접 계산 (bookValue가 None이므로)
+    US 종목: tk.info.bookValue 기반 근사
+    StockStatsTable에는 순수 원본 값만 저장 (팩터 미적용).
+    """
     try:
         end = date.today()
         start = end - timedelta(days=365 * STATS_YEARS)
         tk = yf.Ticker(ticker)
-        # quarterly financials에서 PBR 히스토리 추출
+
         hist = tk.history(start=start.isoformat(), end=end.isoformat(), auto_adjust=True)
         if hist.empty:
             return None
 
-        # yfinance info에서 현재 PBR만 제공하므로
-        # 주가 / BPS(장부가치) 방식으로 히스토리컬 PBR 근사
-        info = tk.info
-        book_value = info.get("bookValue")
-        if not book_value or book_value <= 0:
+        bps = None
+
+        # 1차: balance sheet에서 BPS 직접 계산 (KR/US 공통 시도)
+        bs = tk.quarterly_balance_sheet
+        if bs is not None and not bs.empty:
+            if "Stockholders Equity" in bs.index and "Ordinary Shares Number" in bs.index:
+                equity = bs.loc["Stockholders Equity"].iloc[0]
+                shares = bs.loc["Ordinary Shares Number"].iloc[0]
+                if equity and shares and float(shares) > 0:
+                    bps = float(equity) / float(shares)
+
+        # 2차: tk.info.bookValue fallback (US 종목)
+        if not bps or bps <= 0:
+            book_value = tk.info.get("bookValue")
+            if book_value and float(book_value) > 0:
+                bps = float(book_value)
+
+        if not bps or bps <= 0:
+            _log("warning", "bps_unavailable", ticker=ticker)
             return None
 
-        pbr_series = (hist["Close"] / float(book_value)).dropna()
+        pbr_series = (hist["Close"] / bps).dropna()
         if pbr_series.empty:
             return None
 
         return StockStatsRecord(
             ticker=ticker,
             stat_type="PBR_STATS",
-            pbr_min_value=round(float(pbr_series.min()) * CONSERVATIVE_FACTOR, 4),
+            pbr_min_value=round(float(pbr_series.min()), 4),
             pbr_max_value=round(float(pbr_series.max()), 4),
             pbr_median_value=round(float(pbr_series.median()), 4),
             years_of_data=STATS_YEARS,
