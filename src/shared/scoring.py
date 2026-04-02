@@ -70,7 +70,7 @@ def evaluate_kill_switch(indicators: dict) -> KillSwitchResult:
     """
     vix_data = indicators.get("VIX", {})
     vix_value = vix_data.get("value_value")
-    vix_threshold = 25.0 if vix_data.get("stale") else 30.0
+    vix_threshold = 27.0 if vix_data.get("stale") else 30.0
     if vix_value is not None and float(vix_value) > vix_threshold:
         return KillSwitchResult(active=True,
                                 reason=f"VIX={vix_value}>{vix_threshold}"

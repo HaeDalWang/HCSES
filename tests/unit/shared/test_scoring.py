@@ -22,16 +22,16 @@ def test_kill_switch_vix_over_30():
 
 
 def test_kill_switch_stale_vix_lower_threshold():
-    """stale 지표: VIX 임계값 25로 강화"""
-    indicators = {"VIX": {"value_value": 26.0, "stale": True}, "US10Y": {}, "KRWUSD": {}}
+    """stale 지표: VIX 임계값 27로 강화"""
+    indicators = {"VIX": {"value_value": 28.0, "stale": True}, "US10Y": {}, "KRWUSD": {}}
     result = evaluate_kill_switch(indicators)
     assert result.active is True
     assert "stale" in result.reason
 
 
 def test_kill_switch_stale_vix_below_threshold():
-    """stale 지표라도 25 미만이면 미발동"""
-    indicators = {"VIX": {"value_value": 24.0, "stale": True}, "US10Y": {}, "KRWUSD": {}}
+    """stale 지표라도 27 미만이면 미발동"""
+    indicators = {"VIX": {"value_value": 26.0, "stale": True}, "US10Y": {}, "KRWUSD": {}}
     result = evaluate_kill_switch(indicators)
     assert result.active is False
 
