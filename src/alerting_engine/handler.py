@@ -55,16 +55,25 @@ def _run(event: dict, context) -> dict:
     current_price_value = float(event.get("current_price_value") or 0)
     pbr_value = breakdown.get("pbr_value") or event.get("pbr_value")
     pbr_median_value = event.get("pbr_median_value")
+    pbr_min_value = event.get("pbr_min_value")
     atr_value = event.get("atr_value")
+    vix_value = event.get("vix_value")
+    us10y_value = event.get("us10y_value")
+    kill_switch_warning = event.get("kill_switch_warning", "")
+    rsi_prev = event.get("rsi_prev_level")
+    rsi_curr = event.get("rsi_curr_level")
 
     # 목표가: PBR Median 기반 (유지)
     target_price_str = calc_target_price(current_price_value, pbr_median_value, pbr_value, market)
 
-    # 손절가: ATR(14) 기반 — 현재가 - 1.5 × ATR
-    # ATR 없으면 N/A (보수적 원칙)
+    # 손절가: ATR(14) × 2.0
     stop_loss_price_str = calc_stop_loss_atr(current_price_value, atr_value, market)
 
-    # BR-01: 메시지 포맷
+    # breakdown에 RSI 값 추가 (메시지 포맷용)
+    breakdown["rsi_prev_level"] = rsi_prev
+    breakdown["rsi_curr_level"] = rsi_curr
+
+    # 메시지 포맷
     message = format_alert_message(
         ticker=ticker,
         ticker_name=ticker_name,
@@ -74,6 +83,13 @@ def _run(event: dict, context) -> dict:
         target_price_str=target_price_str,
         stop_loss_price_str=stop_loss_price_str,
         breakdown=breakdown,
+        atr_value=float(atr_value) if atr_value else None,
+        pbr_value=float(pbr_value) if pbr_value else None,
+        pbr_min_value=float(pbr_min_value) if pbr_min_value else None,
+        pbr_median_value=float(pbr_median_value) if pbr_median_value else None,
+        vix_value=float(vix_value) if vix_value else None,
+        us10y_value=float(us10y_value) if us10y_value else None,
+        kill_switch_warning=kill_switch_warning,
     )
 
     # BR-03: 2,000자 제한

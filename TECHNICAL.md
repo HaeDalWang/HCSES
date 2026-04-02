@@ -143,15 +143,35 @@ US 시장: 항상 0점 (데이터 미제공)
 ### Global Kill-Switch (시장 위험 차단)
 
 ```
-다음 중 하나라도 해당 시 → total_score 강제 0점:
+3단계 평가:
 
-1. VIX > 30          (stale 지표 시: > 27)
-2. US10Y 변동률 > 3%  (stale 지표 시: > 2%)
-3. KRW/USD > 볼린저 상단
+VIX 구간별:
+  VIX > 30          → score 강제 0 (알림 완전 차단)
+  25 < VIX <= 30    → score 유지 + 알림에 ⚠️ 경고 문구 추가
+  VIX <= 25         → 정상
+
+stale 지표 시 (전일 데이터 사용):
+  VIX > 27          → score 강제 0
+  23 < VIX <= 27    → 경고 문구 추가
+
+US10Y 변동률:
+  > 3%              → score 강제 0
+  stale 시: > 2%    → score 강제 0
+
+KRW/USD:
+  > 볼린저 상단     → score 강제 0
 
 볼린저 상단 = MA20(KRW/USD) + 2 × σ(KRW/USD, 20일)
+```
 
-stale 지표: 당일 데이터 없어 전일 데이터 사용 시 임계값 보수적 강화
+### 손절가 (ATR 기반)
+
+```
+손절가 = 현재가 - (ATR(14) × 2.0)
+
+ATR = Wilder's Smoothing of True Range (14일)
+True Range = max(High-Low, |High-PrevClose|, |Low-PrevClose|)
+ATR 없으면 N/A (보수적 원칙)
 ```
 
 ### 목표가 / 손절가

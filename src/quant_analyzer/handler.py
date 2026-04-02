@@ -123,6 +123,11 @@ def _run(event: dict, context) -> dict:
                     "pbr_min_value": ctx.pbr_min_value,
                     "pbr_median_value": stats.get("pbr_median_value") if stats else None,
                     "atr_value": atr_value,
+                    "rsi_prev_level": ctx.rsi_prev_level,
+                    "rsi_curr_level": ctx.rsi_curr_level,
+                    "vix_value": float(indicators.get("VIX", {}).get("value_value", 0) or 0),
+                    "us10y_value": float(indicators.get("US10Y", {}).get("value_value", 0) or 0),
+                    "kill_switch_warning": kill_switch.reason if not kill_switch.active and kill_switch.reason else "",
                 })
                 if alert_ok:
                     # 알람 발송 성공 후에만 DONE 처리

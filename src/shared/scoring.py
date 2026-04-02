@@ -61,43 +61,60 @@ class ScoreBreakdown:
 
 def evaluate_kill_switch(indicators: dict) -> KillSwitchResult:
     """
-    BR-02: 세 조건 중 하나라도 해당하면 활성화.
-    데이터 결측 시 해당 조건 미발동 (보수적 원칙 예외).
-    stale=True 지표는 임계값을 보수적으로 강화:
-      - VIX: 30 → 25
-      - US10Y change_pct: 3.0% → 2.0%
-      - KRWUSD: 상단 볼린저 돌파 조건 동일 (이미 보수적)
+    Kill-Switch 3단계 평가:
+    - VIX > 30 (stale: > 27): score 강제 0
+    - 25 < VIX <= 30 (stale: 23 < VIX <= 27): 경고 (차단 아님)
+    - US10Y change_pct > 3% (stale: > 2%): score 강제 0
+    - KRWUSD > 볼린저 상단: score 강제 0
     """
+    warning_reason = ""
+
+    # VIX
     vix_data = indicators.get("VIX", {})
     vix_value = vix_data.get("value_value")
-    vix_threshold = 27.0 if vix_data.get("stale") else 30.0
-    if vix_value is not None and float(vix_value) > vix_threshold:
-        return KillSwitchResult(active=True,
-                                reason=f"VIX={vix_value}>{vix_threshold}"
-                                       f"{'(stale)' if vix_data.get('stale') else ''}",
-                                vix_value=float(vix_value))
+    is_stale = bool(vix_data.get("stale"))
 
+    if vix_value is not None:
+        vix_f = float(vix_value)
+        kill_threshold = 27.0 if is_stale else 30.0
+        warn_threshold = 23.0 if is_stale else 25.0
+
+        if vix_f > kill_threshold:
+            return KillSwitchResult(
+                active=True,
+                reason=f"VIX={vix_f}>{kill_threshold}{'(stale)' if is_stale else ''}",
+                vix_value=vix_f)
+        elif vix_f > warn_threshold:
+            warning_reason = f"⚠️ VIX={vix_f} (경고 구간{'·stale' if is_stale else ''})"
+
+    # US10Y
     yield_data = indicators.get("US10Y", {})
     yield_change_pct = yield_data.get("change_pct")
-    yield_threshold = 2.0 if yield_data.get("stale") else 3.0
-    if yield_change_pct is not None and float(yield_change_pct) > yield_threshold:
-        return KillSwitchResult(active=True,
-                                reason=f"US10Y_change_pct={yield_change_pct}>{yield_threshold}"
-                                       f"{'(stale)' if yield_data.get('stale') else ''}",
-                                yield_change_pct=float(yield_change_pct))
+    yield_stale = bool(yield_data.get("stale"))
+    yield_threshold = 2.0 if yield_stale else 3.0
 
+    if yield_change_pct is not None and float(yield_change_pct) > yield_threshold:
+        return KillSwitchResult(
+            active=True,
+            reason=f"US10Y_change_pct={yield_change_pct}>{yield_threshold}"
+                   f"{'(stale)' if yield_stale else ''}",
+            yield_change_pct=float(yield_change_pct))
+
+    # KRWUSD
     krw_data = indicators.get("KRWUSD", {})
     krwusd_value = krw_data.get("value_value")
     bb_upper_value = krw_data.get("bb_upper_value")
     if (krwusd_value is not None and bb_upper_value is not None and
             float(krwusd_value) > float(bb_upper_value)):
-        return KillSwitchResult(active=True,
-                                reason=f"KRWUSD={krwusd_value}>BB_upper={bb_upper_value}"
-                                       f"{'(stale)' if krw_data.get('stale') else ''}",
-                                krwusd_value=float(krwusd_value),
-                                krwusd_bb_upper_value=float(bb_upper_value))
+        return KillSwitchResult(
+            active=True,
+            reason=f"KRWUSD={krwusd_value}>BB_upper={bb_upper_value}"
+                   f"{'(stale)' if krw_data.get('stale') else ''}",
+            krwusd_value=float(krwusd_value),
+            krwusd_bb_upper_value=float(bb_upper_value))
 
-    return KillSwitchResult(active=False)
+    # 경고 구간 (차단 아님)
+    return KillSwitchResult(active=False, reason=warning_reason)
 
 
 # ── 개별 스코어링 함수 ────────────────────────────────────────────────────────
