@@ -62,19 +62,38 @@ def _calc_ma20(closes: pd.Series) -> Optional[float]:
 # ── 종목 데이터 수집 ──────────────────────────────────────────────────────────
 
 def _fetch_pbr_from_fdr(ticker: str) -> Optional[float]:
-    """EC-01: FinanceDataReader PBR fallback (KR 종목 전용)"""
+    """
+    EC-01: KR 종목 PBR fallback
+    yfinance quarterly_balance_sheet에서 BPS 직접 계산 후 현재가로 PBR 산출.
+    FDR StockListing("KRX")는 API 불안정으로 사용하지 않음.
+    """
     try:
-        import FinanceDataReader as fdr
-        # FDR은 종목 기본 정보에서 PBR 제공
-        info = fdr.StockListing("KRX")
-        row = info[info["Code"] == ticker.replace(".KS", "").replace(".KQ", "")]
-        if not row.empty and "PBR" in row.columns:
-            val = row["PBR"].iloc[0]
-            if pd.notna(val):
-                return round(float(val), 4)
+        tk = yf.Ticker(ticker)
+        bs = tk.quarterly_balance_sheet
+        if bs is None or bs.empty:
+            return None
+        if "Stockholders Equity" not in bs.index or "Ordinary Shares Number" not in bs.index:
+            return None
+
+        equity = bs.loc["Stockholders Equity"].iloc[0]
+        shares = bs.loc["Ordinary Shares Number"].iloc[0]
+        if not equity or not shares or float(shares) <= 0:
+            return None
+
+        bps = float(equity) / float(shares)
+        if bps <= 0:
+            return None
+
+        price = tk.info.get("currentPrice") or tk.info.get("regularMarketPrice")
+        if not price or float(price) <= 0:
+            return None
+
+        pbr = round(float(price) / bps, 4)
+        logger.info(f"pbr_from_balance_sheet ticker={ticker} bps={bps:.0f} pbr={pbr}")
+        return pbr
     except Exception as e:
-        logger.warning(f"fdr_pbr_fallback_failed ticker={ticker} error={str(e)}")
-    return None
+        logger.warning(f"balance_sheet_pbr_failed ticker={ticker} error={str(e)}")
+        return None
 
 
 def collect_stock_data(
@@ -211,14 +230,15 @@ def collect_market_indicators(target_date: date) -> list[MarketIndicatorRecord]:
     except Exception as e:
         logger.error(f"vix_collection_failed error={str(e)}")
 
-    # US10Y (FRED)
+    # US10Y (yfinance ^TNX — FRED 대체, 타임아웃 이슈 해결)
     try:
-        import pandas_datareader.data as web
-        df = web.DataReader("DGS10", "fred", start, end)
-        df = df.dropna()
+        df = yf.download("^TNX", start=start.isoformat(), end=end.isoformat(),
+                         auto_adjust=True, progress=False)
         if not df.empty:
-            today_val = round(float(df.iloc[-1, 0]), 4)
-            prev_val = round(float(df.iloc[-2, 0]), 4) if len(df) >= 2 else None
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            today_val = round(float(df["Close"].iloc[-1]), 4)
+            prev_val = round(float(df["Close"].iloc[-2]), 4) if len(df) >= 2 else None
             change_pct = round((today_val - prev_val) / prev_val * 100, 4) if prev_val else None
             records.append(MarketIndicatorRecord(
                 indicator="US10Y", date=target_date.isoformat(),
