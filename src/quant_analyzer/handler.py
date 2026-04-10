@@ -5,7 +5,7 @@ DST 검증, Kill-Switch, Bulkhead, AlertingEngine 호출
 import json
 import logging
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import boto3
 
@@ -73,6 +73,13 @@ def _run(event: dict, context) -> dict:
     now = datetime.utcnow()
     correlation_id = getattr(context, "aws_request_id", "local")
 
+    # DC는 장 마감 후(KST 16:30) 실행, QA는 장 중(KST 09:00~15:20) 실행
+    # → QA 실행 시점에 오늘 데이터는 아직 없음 → 어제(최신 수집일) 데이터를 분석
+    analysis_date = today - timedelta(days=1)
+    # 주말 건너뛰기 (월요일 QA → 금요일 데이터)
+    while analysis_date.weekday() >= 5:
+        analysis_date -= timedelta(days=1)
+
     # BR-08: 시장 운영 시간 검증 (TC-04 DST 반영)
     if not is_within_market_hours(market, now):
         _log("info", "outside_market_hours", market=market)
@@ -97,13 +104,13 @@ def _run(event: dict, context) -> dict:
     for ticker in tickers:
         try:
             # BR-06: COMPLETE + PENDING 레코드만 처리
-            record = db.get_latest_complete_record(ticker, today.isoformat(), STOCK_DAILY_TABLE)
+            record = db.get_latest_complete_record(ticker, analysis_date.isoformat(), STOCK_DAILY_TABLE)
             if record is None:
                 results["skipped"].append(ticker)
                 continue
 
             stats = get_stock_stats(ticker)
-            ctx, atr_value = build_scoring_context(record, stats, ticker, market, today)
+            ctx, atr_value = build_scoring_context(record, stats, ticker, market, analysis_date)
             breakdown = calculate_total_score(ctx, market, kill_switch)
 
             _log("info", "analysis_complete", ticker=ticker, market=market,
@@ -117,7 +124,7 @@ def _run(event: dict, context) -> dict:
                     "ticker": ticker,
                     "ticker_name": TICKER_NAMES.get(ticker, ticker),
                     "market": market,
-                    "date": today.isoformat(),
+                    "date": analysis_date.isoformat(),
                     "breakdown": breakdown.__dict__,
                     "current_price_value": ctx.close_value,
                     "pbr_min_value": ctx.pbr_min_value,
@@ -131,14 +138,14 @@ def _run(event: dict, context) -> dict:
                 })
                 if alert_ok:
                     # 알람 발송 성공 후에만 DONE 처리
-                    db.update_analysis_status(ticker, today.isoformat(), STOCK_DAILY_TABLE)
+                    db.update_analysis_status(ticker, analysis_date.isoformat(), STOCK_DAILY_TABLE)
                     results["alerted"].append(ticker)
                 else:
                     # 알람 실패 → PENDING 유지, 다음 실행에서 재시도
                     _log("warning", "alert_failed_analysis_status_kept_pending", ticker=ticker)
             else:
                 # 알람 불필요 → 바로 DONE
-                db.update_analysis_status(ticker, today.isoformat(), STOCK_DAILY_TABLE)
+                db.update_analysis_status(ticker, analysis_date.isoformat(), STOCK_DAILY_TABLE)
 
             results["analyzed"].append(ticker)
 
