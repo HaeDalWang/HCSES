@@ -90,8 +90,8 @@ def _run(event: dict, context) -> dict:
         _log("info", "market_holiday_skip", market=market)
         return {"statusCode": 200, "body": "holiday_skip"}
 
-    # BR-02: Kill-Switch 선행 평가
-    indicators = load_market_indicators(today)
+    # 시장 지표도 DC가 장 마감 후 수집하므로 analysis_date 기준으로 조회
+    indicators = load_market_indicators(analysis_date)
     kill_switch = evaluate_kill_switch(indicators)
     if kill_switch.active:
         _log("warning", "kill_switch_active", reason=kill_switch.reason,

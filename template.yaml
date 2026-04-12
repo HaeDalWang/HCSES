@@ -5,6 +5,8 @@ Description: HCSES - High-Confidence Stock Entry Scanner
 Globals:
   Function:
     Runtime: python3.12
+    Architectures:
+      - arm64
     Environment:
       Variables:
         STOCK_DAILY_TABLE: !Ref StockDailyTable
