@@ -16,7 +16,7 @@ from src.alerting_engine.alert_service import (
 )
 from src.shared.secrets_cache import get_secret
 
-logging.basicConfig(level=logging.INFO)
+logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 SECRET_NAME = os.environ.get("DISCORD_SECRET_NAME", "hcses/discord-webhook-url")

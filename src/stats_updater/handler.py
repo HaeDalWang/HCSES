@@ -17,7 +17,7 @@ from src.shared import dynamodb_client as db
 from src.shared.models import StockStatsRecord
 from src.data_collector.handler import TICKER_LIST
 
-logging.basicConfig(level=logging.INFO)
+logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 STOCK_STATS_TABLE = os.environ.get("STOCK_STATS_TABLE", "hcses-stock-stats")
@@ -35,9 +35,8 @@ def _log(level: str, message: str, **kwargs) -> None:
 def recalculate_pbr_stats(ticker: str) -> Optional[StockStatsRecord]:
     """
     최근 N년 PBR Min/Max/Median 계산.
-    KR 종목: quarterly_balance_sheet에서 BPS 직접 계산 (bookValue가 None이므로)
-    US 종목: tk.info.bookValue 기반 근사
-    StockStatsTable에는 순수 원본 값만 저장 (팩터 미적용).
+    분기별 balance sheet BPS를 일별로 보간하여 시계열 PBR 계산.
+    단일 현재 BPS 사용 시 과거 PBR이 비현실적으로 낮아지는 문제 해결.
     """
     try:
         end = date.today()
@@ -48,29 +47,9 @@ def recalculate_pbr_stats(ticker: str) -> Optional[StockStatsRecord]:
         if hist.empty:
             return None
 
-        bps = None
-
-        # 1차: balance sheet에서 BPS 직접 계산 (KR/US 공통 시도)
-        bs = tk.quarterly_balance_sheet
-        if bs is not None and not bs.empty:
-            if "Stockholders Equity" in bs.index and "Ordinary Shares Number" in bs.index:
-                equity = bs.loc["Stockholders Equity"].iloc[0]
-                shares = bs.loc["Ordinary Shares Number"].iloc[0]
-                if equity and shares and float(shares) > 0:
-                    bps = float(equity) / float(shares)
-
-        # 2차: tk.info.bookValue fallback (US 종목)
-        if not bps or bps <= 0:
-            book_value = tk.info.get("bookValue")
-            if book_value and float(book_value) > 0:
-                bps = float(book_value)
-
-        if not bps or bps <= 0:
-            _log("warning", "bps_unavailable", ticker=ticker)
-            return None
-
-        pbr_series = (hist["Close"] / bps).dropna()
-        if pbr_series.empty:
+        pbr_series = _calc_historical_pbr(tk, hist)
+        if pbr_series is None or pbr_series.empty:
+            _log("warning", "pbr_series_empty", ticker=ticker)
             return None
 
         return StockStatsRecord(
@@ -85,6 +64,71 @@ def recalculate_pbr_stats(ticker: str) -> Optional[StockStatsRecord]:
     except Exception as e:
         _log("warning", "pbr_stats_failed", ticker=ticker, error=str(e))
         return None
+
+
+def _calc_historical_pbr(tk, hist) -> Optional[object]:
+    """
+    연간+분기 balance sheet BPS를 일별 forward-fill하여 시계열 PBR 계산.
+    - 연간(4년) + 분기(4~5분기) 합산으로 커버리지 확대
+    - timezone-aware hist index를 tz-naive로 정규화하여 KR 종목 호환
+    - fallback: tk.info.bookValue (단일값)
+    """
+    import pandas as pd
+
+    def _bps_from_bs(bs) -> Optional[pd.Series]:
+        if bs is None or bs.empty:
+            return None
+        if "Stockholders Equity" not in bs.index or "Ordinary Shares Number" not in bs.index:
+            return None
+        eq = bs.loc["Stockholders Equity"].dropna()
+        sh = bs.loc["Ordinary Shares Number"].dropna()
+        common = eq.index.intersection(sh.index)
+        s = pd.Series(
+            {d: float(eq[d]) / float(sh[d]) for d in common if float(sh[d]) > 0},
+            dtype=float,
+        ).sort_index()
+        return s[s > 0] if not s.empty else None
+
+    # hist index를 tz-naive date로 정규화 (KR 종목은 Asia/Seoul tz-aware)
+    hist_norm = hist.copy()
+    if hist_norm.index.tz is not None:
+        hist_norm.index = hist_norm.index.normalize().tz_localize(None)
+
+    try:
+        bps_annual = _bps_from_bs(tk.balance_sheet)
+        bps_quarterly = _bps_from_bs(tk.quarterly_balance_sheet)
+
+        parts = [s for s in [bps_annual, bps_quarterly] if s is not None]
+        if parts:
+            bps_combined = pd.concat(parts).sort_index()
+            bps_combined = bps_combined[~bps_combined.index.duplicated(keep="last")]
+
+            bps_daily = (
+                bps_combined
+                .reindex(bps_combined.index.union(hist_norm.index))
+                .sort_index()
+                .ffill()
+                .reindex(hist_norm.index)
+            )
+            valid = bps_daily.dropna()
+            if len(valid) >= len(hist_norm) * 0.3:
+                pbr = (hist_norm["Close"] / bps_daily).dropna().round(4)
+                result = pbr[pbr > 0]
+                if not result.empty:
+                    return result
+    except Exception:
+        pass
+
+    # fallback: tk.info.bookValue (단일값 — 정확도 낮지만 없는 것보다 나음)
+    try:
+        book_value = tk.info.get("bookValue")
+        if book_value and float(book_value) > 0:
+            pbr = (hist_norm["Close"] / float(book_value)).dropna().round(4)
+            return pbr[pbr > 0]
+    except Exception:
+        pass
+
+    return None
 
 
 def handler(event: dict, context) -> dict:

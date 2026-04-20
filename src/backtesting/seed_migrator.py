@@ -25,36 +25,28 @@ def generate_pbr_stats(ticker: str, start: str, end: str) -> StockStatsRecord | 
     5~10년 PBR 히스토리컬 데이터로 Min/Max/Median 계산.
 
     [BPS 계산 방식]
-    KR 종목: yfinance quarterly_balance_sheet에서 BPS 직접 계산
-             (Stockholders Equity / Ordinary Shares Number)
-    US 종목: yfinance tk.info.bookValue 기반 근사
+    분기별 balance sheet BPS를 일별로 forward-fill하여 시계열 PBR 계산.
+    단일 현재 BPS 사용 시 과거 PBR이 비현실적으로 낮아지는 문제 해결.
 
     [임계값 적용 원칙]
     StockStatsTable에는 순수한 역사적 최저 PBR 원본 값만 저장.
     보수적 임계값 평가는 shared/scoring.py의 pbr_min_value * 1.1 로직에서만 단독 적용.
     """
     try:
-        pbr_series = None
+        import pandas as pd
+        tk = yf.Ticker(ticker)
+        hist = tk.history(start=start, end=end, auto_adjust=True)
+        if hist.empty:
+            logger.warning(f"pbr_no_history ticker={ticker}")
+            return None
 
-        # KR 종목: FinanceDataReader 우선 시도
-        if ticker.endswith(".KS") or ticker.endswith(".KQ"):
-            pbr_series = _get_pbr_from_fdr(ticker, start, end)
-
-        # US 종목 또는 FDR 실패 시: yfinance bookValue 기반 근사
-        if pbr_series is None or pbr_series.empty:
-            pbr_series = _get_pbr_from_yfinance(ticker, start, end)
-
+        pbr_series = _calc_historical_pbr(tk, hist)
         if pbr_series is None or pbr_series.empty:
             logger.warning(f"pbr_data_unavailable ticker={ticker}")
             return None
 
         raw_min = float(pbr_series.min())
-
-        logger.info(
-            f"pbr_stats_generated ticker={ticker} "
-            f"pbr_min={round(raw_min, 4)} "
-            f"note=raw_value_no_factor"
-        )
+        logger.info(f"pbr_stats_generated ticker={ticker} pbr_min={round(raw_min, 4)} pbr_median={round(float(pbr_series.median()), 4)}")
 
         return StockStatsRecord(
             ticker=ticker,
@@ -70,61 +62,65 @@ def generate_pbr_stats(ticker: str, start: str, end: str) -> StockStatsRecord | 
         return None
 
 
-def _get_pbr_from_fdr(ticker: str, start: str, end: str):
+def _calc_historical_pbr(tk, hist):
     """
-    yfinance balance sheet에서 BPS를 직접 계산하여 PBR 시계열 생성.
-    KR 종목은 priceToBook/bookValue가 None이므로 이 방식을 사용.
-    BPS = Stockholders Equity / Ordinary Shares Number
-    PBR = Close / BPS
+    연간+분기 balance sheet BPS를 일별 forward-fill하여 시계열 PBR 계산.
+    - 연간(4년) + 분기(4~5분기) 합산으로 커버리지 확대
+    - timezone-aware hist index를 tz-naive로 정규화하여 KR 종목 호환
+    - fallback: tk.info.bookValue (단일값)
     """
-    try:
-        tk = yf.Ticker(ticker)
-        bs = tk.quarterly_balance_sheet
+    import pandas as pd
+
+    def _bps_from_bs(bs):
         if bs is None or bs.empty:
             return None
-
-        # 최신 분기 재무제표에서 BPS 계산
         if "Stockholders Equity" not in bs.index or "Ordinary Shares Number" not in bs.index:
             return None
+        eq = bs.loc["Stockholders Equity"].dropna()
+        sh = bs.loc["Ordinary Shares Number"].dropna()
+        common = eq.index.intersection(sh.index)
+        s = pd.Series(
+            {d: float(eq[d]) / float(sh[d]) for d in common if float(sh[d]) > 0},
+            dtype=float,
+        ).sort_index()
+        return s[s > 0] if not s.empty else None
 
-        equity = bs.loc["Stockholders Equity"].iloc[0]
-        shares = bs.loc["Ordinary Shares Number"].iloc[0]
-        if not equity or not shares or float(shares) <= 0:
-            return None
+    # hist index를 tz-naive date로 정규화 (KR 종목은 Asia/Seoul tz-aware)
+    hist_norm = hist.copy()
+    if hist_norm.index.tz is not None:
+        hist_norm.index = hist_norm.index.normalize().tz_localize(None)
 
-        bps = float(equity) / float(shares)
-        if bps <= 0:
-            return None
-
-        # 히스토리컬 주가 로드
-        hist = tk.history(start=start, end=end, auto_adjust=True)
-        if hist.empty:
-            return None
-
-        pbr_series = (hist["Close"] / bps).dropna().round(4)
-        logger.info(f"pbr_from_balance_sheet ticker={ticker} bps={bps:.0f} latest_pbr={pbr_series.iloc[-1]:.4f}")
-        return pbr_series
-    except Exception as e:
-        logger.warning(f"fdr_pbr_stats_failed ticker={ticker} error={str(e)}")
-        return None
-
-
-def _get_pbr_from_yfinance(ticker: str, start: str, end: str):
-    """yfinance bookValue 기반 PBR 시계열 근사 (US 종목 전용)"""
     try:
-        tk = yf.Ticker(ticker)
-        hist = tk.history(start=start, end=end, auto_adjust=True)
-        if hist.empty:
-            return None
-        info = tk.info
-        book_value = info.get("bookValue")
-        if not book_value or float(book_value) <= 0:
-            return None
-        pbr_series = (hist["Close"] / float(book_value)).dropna().round(4)
-        return pbr_series
-    except Exception as e:
-        logger.warning(f"yf_pbr_stats_failed ticker={ticker} error={str(e)}")
-        return None
+        bps_annual = _bps_from_bs(tk.balance_sheet)
+        bps_quarterly = _bps_from_bs(tk.quarterly_balance_sheet)
+        parts = [s for s in [bps_annual, bps_quarterly] if s is not None]
+        if parts:
+            bps_combined = pd.concat(parts).sort_index()
+            bps_combined = bps_combined[~bps_combined.index.duplicated(keep="last")]
+            bps_daily = (
+                bps_combined
+                .reindex(bps_combined.index.union(hist_norm.index))
+                .sort_index()
+                .ffill()
+                .reindex(hist_norm.index)
+            )
+            valid = bps_daily.dropna()
+            if len(valid) >= len(hist_norm) * 0.3:
+                pbr = (hist_norm["Close"] / bps_daily).dropna().round(4)
+                result = pbr[pbr > 0]
+                if not result.empty:
+                    return result
+    except Exception:
+        pass
+
+    try:
+        book_value = tk.info.get("bookValue")
+        if book_value and float(book_value) > 0:
+            pbr = (hist_norm["Close"] / float(book_value)).dropna().round(4)
+            return pbr[pbr > 0]
+    except Exception:
+        pass
+    return None
 
 
 def generate_and_migrate_seed(tickers: list[str], start: str, end: str) -> None:

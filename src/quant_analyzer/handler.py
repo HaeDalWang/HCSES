@@ -19,7 +19,7 @@ from src.shared.market_calendar import is_within_market_hours, is_market_holiday
 from src.shared.scoring import evaluate_kill_switch, calculate_total_score, ALERT_THRESHOLD
 from src.data_collector.handler import TICKER_LIST, TICKER_NAMES
 
-logging.basicConfig(level=logging.INFO)
+logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 STOCK_DAILY_TABLE = os.environ.get("STOCK_DAILY_TABLE", "hcses-stock-daily")

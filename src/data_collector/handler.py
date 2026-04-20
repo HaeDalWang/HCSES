@@ -18,7 +18,7 @@ from src.shared import dynamodb_client as db
 from src.shared.market_calendar import is_market_holiday
 
 # 구조화 로깅 설정
-logging.basicConfig(level=logging.INFO)
+logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 STOCK_DAILY_TABLE = os.environ.get("STOCK_DAILY_TABLE", "hcses-stock-daily")
