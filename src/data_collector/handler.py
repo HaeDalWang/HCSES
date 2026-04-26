@@ -40,21 +40,44 @@ TICKER_LIST: dict[str, list[str]] = {
         "030200.KS",  # KT
     ],
     "US": [
-        "META",   # Meta
+        # 반도체/장비
         "MU",     # Micron Technology
         "AMD",    # Advanced Micro Devices
+        "INTC",   # Intel
+        "QCOM",   # Qualcomm
         "AMAT",   # Applied Materials
+        "LRCX",   # Lam Research
+        # 빅테크
+        "META",   # Meta Platforms
+        # 금융
         "JPM",    # JPMorgan Chase
         "GS",     # Goldman Sachs
-        "BRK-B",  # Berkshire Hathaway
+        "C",      # Citigroup
+        "WFC",    # Wells Fargo
+        "BAC",    # Bank of America
+        # 에너지
         "XOM",    # ExxonMobil
         "CVX",    # Chevron
+        "OXY",    # Occidental Petroleum
+        "DVN",    # Devon Energy
+        # 소재/철강
+        "FCX",    # Freeport-McMoRan
+        "NUE",    # Nucor
+        # 자동차/산업재
+        "F",      # Ford
+        "GM",     # General Motors
+        "GE",     # GE Aerospace
+        "CAT",    # Caterpillar
+        # 헬스케어
         "UNH",    # UnitedHealth Group
-        "LMT",    # Lockheed Martin
+        "BMY",    # Bristol-Myers Squibb
+        # 통신/미디어
+        "T",      # AT&T
     ],
 }
 
 TICKER_NAMES: dict[str, str] = {
+    # KR
     "005930.KS": "삼성전자",
     "000660.KS": "SK하이닉스",
     "035420.KS": "NAVER",
@@ -66,17 +89,32 @@ TICKER_NAMES: dict[str, str] = {
     "005490.KS": "POSCO홀딩스",
     "033780.KS": "KT&G",
     "030200.KS": "KT",
-    "META":  "Meta",
+    # US
     "MU":    "Micron Technology",
     "AMD":   "Advanced Micro Devices",
+    "INTC":  "Intel",
+    "QCOM":  "Qualcomm",
     "AMAT":  "Applied Materials",
+    "LRCX":  "Lam Research",
+    "META":  "Meta Platforms",
     "JPM":   "JPMorgan Chase",
     "GS":    "Goldman Sachs",
-    "BRK-B": "Berkshire Hathaway",
+    "C":     "Citigroup",
+    "WFC":   "Wells Fargo",
+    "BAC":   "Bank of America",
     "XOM":   "ExxonMobil",
     "CVX":   "Chevron",
+    "OXY":   "Occidental Petroleum",
+    "DVN":   "Devon Energy",
+    "FCX":   "Freeport-McMoRan",
+    "NUE":   "Nucor",
+    "F":     "Ford",
+    "GM":    "General Motors",
+    "GE":    "GE Aerospace",
+    "CAT":   "Caterpillar",
     "UNH":   "UnitedHealth Group",
-    "LMT":   "Lockheed Martin",
+    "BMY":   "Bristol-Myers Squibb",
+    "T":     "AT&T",
 }
 
 

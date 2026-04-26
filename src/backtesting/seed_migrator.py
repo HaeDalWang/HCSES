@@ -31,11 +31,16 @@ def generate_pbr_stats(ticker: str, start: str, end: str) -> StockStatsRecord | 
     [임계값 적용 원칙]
     StockStatsTable에는 순수한 역사적 최저 PBR 원본 값만 저장.
     보수적 임계값 평가는 shared/scoring.py의 pbr_min_value * 1.1 로직에서만 단독 적용.
+
+    [KR 종목 특이사항]
+    IMF(1997), 금융위기(2008) 극단값 제거를 위해 2010-01-01 이후 데이터만 사용.
+    US 종목은 start 인자를 그대로 사용.
     """
     try:
         import pandas as pd
         tk = yf.Ticker(ticker)
-        hist = tk.history(start=start, end=end, auto_adjust=True)
+        effective_start = "2010-01-01" if (ticker.endswith(".KS") or ticker.endswith(".KQ")) else start
+        hist = tk.history(start=effective_start, end=end, auto_adjust=True)
         if hist.empty:
             logger.warning(f"pbr_no_history ticker={ticker}")
             return None

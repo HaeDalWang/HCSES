@@ -37,10 +37,16 @@ def recalculate_pbr_stats(ticker: str) -> Optional[StockStatsRecord]:
     최근 N년 PBR Min/Max/Median 계산.
     분기별 balance sheet BPS를 일별로 보간하여 시계열 PBR 계산.
     단일 현재 BPS 사용 시 과거 PBR이 비현실적으로 낮아지는 문제 해결.
+
+    KR 종목: IMF/금융위기 극단값 제거를 위해 2010-01-01 이후 데이터만 사용.
+    US 종목: STATS_YEARS 기준 전체 역사 데이터 사용.
     """
     try:
         end = date.today()
-        start = end - timedelta(days=365 * STATS_YEARS)
+        if ticker.endswith(".KS") or ticker.endswith(".KQ"):
+            start = date(2010, 1, 1)
+        else:
+            start = end - timedelta(days=365 * STATS_YEARS)
         tk = yf.Ticker(ticker)
 
         hist = tk.history(start=start.isoformat(), end=end.isoformat(), auto_adjust=True)
@@ -111,7 +117,10 @@ def _calc_historical_pbr(tk, hist) -> Optional[object]:
                 .reindex(hist_norm.index)
             )
             valid = bps_daily.dropna()
-            if len(valid) >= len(hist_norm) * 0.3:
+            # KR 종목은 hist가 최대 16년(2010~)이지만 balance_sheet는 4년만 제공.
+            # 유효 커버리지 10% 이상이면 충분히 신뢰 가능한 PBR 계산 가능.
+            coverage_threshold = 0.1 if (tk.ticker.endswith(".KS") or tk.ticker.endswith(".KQ")) else 0.3
+            if len(valid) >= len(hist_norm) * coverage_threshold:
                 pbr = (hist_norm["Close"] / bps_daily).dropna().round(4)
                 result = pbr[pbr > 0]
                 if not result.empty:

@@ -126,31 +126,51 @@ aws secretsmanager create-secret \
 
 StockStatsTable에 PBR 통계 초기값을 채워야 QuantAnalyzer가 정상 동작합니다.
 
+> **KR 종목 주의**: `--start` 인자와 무관하게 코드 내부에서 2010-01-01 이후 데이터만 사용합니다.
+> IMF(1997), 금융위기(2008) 극단값을 제외하기 위함입니다.
+
 ```bash
 source .venv/bin/activate
 
-# KR 종목 Seed 생성 (5~7년 데이터)
+# KR 종목 11개 Seed 생성
 PYTHONPATH=. python -m src.backtesting.backtest_runner \
-  --tickers 005930.KS 000660.KS 035420.KS 051910.KS 006400.KS \
+  --tickers \
+    005930.KS 000660.KS 035420.KS 005380.KS 000270.KS \
+    105560.KS 010950.KS 329180.KS 005490.KS 033780.KS 030200.KS \
   --market KR \
-  --start 2019-01-01 \
-  --end 2025-12-31 \
+  --start 2010-01-01 \
+  --end $(date +%Y-%m-%d) \
   --seed
 
-# US 종목 Seed 생성
+# US 종목 25개 Seed 생성
 PYTHONPATH=. python -m src.backtesting.backtest_runner \
-  --tickers AAPL MSFT GOOGL AMZN META \
+  --tickers \
+    MU AMD INTC QCOM AMAT LRCX \
+    META \
+    JPM GS C WFC BAC \
+    XOM CVX OXY DVN \
+    FCX NUE \
+    F GM GE CAT \
+    UNH BMY \
+    T \
   --market US \
-  --start 2019-01-01 \
-  --end 2025-12-31 \
+  --start 2017-01-01 \
+  --end $(date +%Y-%m-%d) \
   --seed
 ```
 
 Seed 저장 확인:
 ```bash
+# KR 확인 (현대차)
 aws dynamodb get-item \
   --table-name hcses-stock-stats \
-  --key '{"ticker":{"S":"005930.KS"},"stat_type":{"S":"PBR_STATS"}}' \
+  --key '{"ticker":{"S":"005380.KS"},"stat_type":{"S":"PBR_STATS"}}' \
+  --region ap-northeast-2
+
+# US 확인 (MU)
+aws dynamodb get-item \
+  --table-name hcses-stock-stats \
+  --key '{"ticker":{"S":"MU"},"stat_type":{"S":"PBR_STATS"}}' \
   --region ap-northeast-2
 ```
 
@@ -240,30 +260,74 @@ aws dynamodb get-item \
 
 실제 Discord 메시지 수신을 확인합니다.
 
+### 11-1. KR 테스트 (삼성전자)
 ```bash
 aws lambda invoke \
   --function-name hcses-alerting-engine \
   --payload '{
     "ticker": "005930.KS",
+    "ticker_name": "삼성전자",
     "market": "KR",
-    "date": "2026-03-29",
-    "current_price_value": 75000,
-    "pbr_median_value": 1.2,
-    "pbr_min_value": 0.4,
+    "date": "2026-04-24",
+    "current_price_value": 87400,
+    "pbr_median_value": 1.15,
+    "pbr_min_value": 0.7571,
+    "atr_value": 1800,
+    "rsi_prev_level": 28,
+    "rsi_curr_level": 36,
+    "vix_value": 18.7,
+    "us10y_value": 4.35,
+    "kill_switch_warning": "",
     "breakdown": {
       "total_score": 100,
       "valuation_score": 40,
       "momentum_score": 30,
       "supply_demand_score": 30,
-      "signals": ["ValuationFloor: PBR(0.55)<=MinPBR*1.1(0.55)", "MomentumPivot: RSI 28->36", "SupplyDemand: 양전 전환"],
-      "pbr_value": 0.55
+      "signals": ["ValuationFloor: PBR(0.75)<=MinPBR*1.1(0.83)", "MomentumPivot: Price(87400)>MA20(85200), RSI 28→36", "SupplyDemand: CumNetBuy -1200→450 (양전 전환)"],
+      "kill_switch_active": false,
+      "kill_switch_reason": ""
     }
   }' \
   --cli-binary-format raw-in-base64-out \
   --region ap-northeast-2 \
-  /tmp/ae-output.json
+  /tmp/ae-kr-output.json
 
-cat /tmp/ae-output.json
+cat /tmp/ae-kr-output.json
+```
+
+### 11-2. US 테스트 (MU)
+```bash
+aws lambda invoke \
+  --function-name hcses-alerting-engine \
+  --payload '{
+    "ticker": "MU",
+    "ticker_name": "Micron Technology",
+    "market": "US",
+    "date": "2026-04-24",
+    "current_price_value": 98.45,
+    "pbr_median_value": 2.22,
+    "pbr_min_value": 1.0511,
+    "atr_value": 4.20,
+    "rsi_prev_level": 28,
+    "rsi_curr_level": 37,
+    "vix_value": 18.7,
+    "us10y_value": 4.35,
+    "kill_switch_warning": "",
+    "breakdown": {
+      "total_score": 100,
+      "valuation_score": 60,
+      "momentum_score": 40,
+      "supply_demand_score": 0,
+      "signals": ["ValuationFloor: PBR(1.05)<=MinPBR*1.1(1.16)", "MomentumPivot: Price(98.45)>MA20(95.20), RSI 28→37"],
+      "kill_switch_active": false,
+      "kill_switch_reason": ""
+    }
+  }' \
+  --cli-binary-format raw-in-base64-out \
+  --region ap-northeast-2 \
+  /tmp/ae-us-output.json
+
+cat /tmp/ae-us-output.json
 ```
 
 Discord 채널에서 알람 메시지가 수신되면 성공입니다.

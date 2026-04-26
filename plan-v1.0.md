@@ -7,9 +7,9 @@
 
 | 항목 | 내용 |
 |------|------|
-| 목적 | US 시장 저평가 + 기술적 반등 구간 포착 → Discord 알림 수신 → 매수 판단 |
-| 대상 시장 | US (NYSE / NASDAQ) 단독 |
-| 운영 종목 수 | 11종목 |
+| 목적 | KR/US 시장 저평가 + 기술적 반등 구간 포착 → Discord 알림 수신 → 매수 판단 |
+| 대상 시장 | KR (KOSPI/KOSDAQ) + US (NYSE/NASDAQ) |
+| 운영 종목 수 | 36종목 (KR 11 + US 25) |
 | 알림 채널 | Discord Webhook |
 | 인프라 | AWS Lambda + DynamoDB + EventBridge (SAM) |
 | 예상 알림 빈도 | 월 1~2회 (고확신 신호만) |
@@ -18,20 +18,58 @@
 
 ## 2. 운영 종목 리스트
 
+> 최종 반영 기준: 2026-04-26 (PARA 상장폐지 제외 후)
+> 소스 코드: `src/data_collector/handler.py`
+
 ```python
 TICKER_LIST = {
+    "KR": [
+        "005930.KS",  # 삼성전자
+        "000660.KS",  # SK하이닉스
+        "035420.KS",  # NAVER
+        "005380.KS",  # 현대차
+        "000270.KS",  # 기아
+        "105560.KS",  # KB금융
+        "010950.KS",  # S-Oil
+        "329180.KS",  # HD현대중공업
+        "005490.KS",  # POSCO홀딩스
+        "033780.KS",  # KT&G
+        "030200.KS",  # KT
+    ],
     "US": [
-        "META",   # Meta Platforms
-        "MU",     # Micron Technology
-        "AMD",    # Advanced Micro Devices
-        "AMAT",   # Applied Materials
-        "JPM",    # JPMorgan Chase
-        "GS",     # Goldman Sachs
-        "BRK-B",  # Berkshire Hathaway  ⚠️ PBR 0.0 이슈 — Seed Data 수동 검증 필요
-        "XOM",    # ExxonMobil
-        "CVX",    # Chevron
-        "UNH",    # UnitedHealth Group
-        "LMT",    # Lockheed Martin     ⚠️ PBR 구조적 고평가 — 알림 빈도 낮을 수 있음
+        # 반도체/장비
+        "MU",    # Micron Technology
+        "AMD",   # Advanced Micro Devices
+        "INTC",  # Intel
+        "QCOM",  # Qualcomm
+        "AMAT",  # Applied Materials
+        "LRCX",  # Lam Research
+        # 빅테크
+        "META",  # Meta Platforms
+        # 금융
+        "JPM",   # JPMorgan Chase
+        "GS",    # Goldman Sachs
+        "C",     # Citigroup
+        "WFC",   # Wells Fargo
+        "BAC",   # Bank of America
+        # 에너지
+        "XOM",   # ExxonMobil
+        "CVX",   # Chevron
+        "OXY",   # Occidental Petroleum
+        "DVN",   # Devon Energy
+        # 소재/철강
+        "FCX",   # Freeport-McMoRan
+        "NUE",   # Nucor
+        # 자동차/산업재
+        "F",     # Ford
+        "GM",    # General Motors
+        "GE",    # GE Aerospace
+        "CAT",   # Caterpillar
+        # 헬스케어
+        "UNH",   # UnitedHealth Group
+        "BMY",   # Bristol-Myers Squibb
+        # 통신
+        "T",     # AT&T
     ]
 }
 ```
@@ -40,19 +78,54 @@ TICKER_LIST = {
 
 ```python
 TICKER_NAME_MAP = {
-    "META":  "Meta Platforms",
+    # KR
+    "005930.KS": "삼성전자",
+    "000660.KS": "SK하이닉스",
+    "035420.KS": "NAVER",
+    "005380.KS": "현대차",
+    "000270.KS": "기아",
+    "105560.KS": "KB금융",
+    "010950.KS": "S-Oil",
+    "329180.KS": "HD현대중공업",
+    "005490.KS": "POSCO홀딩스",
+    "033780.KS": "KT&G",
+    "030200.KS": "KT",
+    # US
     "MU":    "Micron Technology",
     "AMD":   "Advanced Micro Devices",
+    "INTC":  "Intel",
+    "QCOM":  "Qualcomm",
     "AMAT":  "Applied Materials",
+    "LRCX":  "Lam Research",
+    "META":  "Meta Platforms",
     "JPM":   "JPMorgan Chase",
     "GS":    "Goldman Sachs",
-    "BRK-B": "Berkshire Hathaway",
+    "C":     "Citigroup",
+    "WFC":   "Wells Fargo",
+    "BAC":   "Bank of America",
     "XOM":   "ExxonMobil",
     "CVX":   "Chevron",
+    "OXY":   "Occidental Petroleum",
+    "DVN":   "Devon Energy",
+    "FCX":   "Freeport-McMoRan",
+    "NUE":   "Nucor",
+    "F":     "Ford",
+    "GM":    "General Motors",
+    "GE":    "GE Aerospace",
+    "CAT":   "Caterpillar",
     "UNH":   "UnitedHealth Group",
-    "LMT":   "Lockheed Martin",
+    "BMY":   "Bristol-Myers Squibb",
+    "T":     "AT&T",
 }
 ```
+
+### 제외 종목 이력
+
+| 티커 | 제외 사유 | 제외일 |
+|---|---|---|
+| LMT | PBR 구조적 고평가 (min 10.18), 조건 충족 불가 | 2026-04-26 |
+| BRK-B | PBR 데이터 0.0009 왜곡 (수동 검증 필요) | 2026-04-26 |
+| PARA | 상장폐지 (Skydance Media 합병 소멸) | 2026-04-26 |
 
 ---
 
@@ -285,14 +358,15 @@ stale 지표 시:
 
 ## 8. 배포 전 체크리스트
 
-- [ ] ATR 기반 손절가 패치 완료 (2× ATR 확인)
-- [ ] Kill-Switch VIX 로직 변경 완료 (30 차단 / 25~30 경고)
-- [ ] 알림 포맷 수정 완료 (회사명 + 티커 + 거래소 제목)
-- [ ] BRK-B Seed Data 수동 검증 (PBR 0.0 이슈)
-- [ ] 22개 종목 BPS 검증 스크립트 실행 결과 이상 없음 확인
-- [ ] backtest_runner.py --seed 실행 (DynamoDB Seed Data 적재)
-- [ ] 백테스팅 결과 확인 (연간 알림 발생 횟수 검토)
-- [ ] AWS SAM 배포
+- [x] ATR 기반 손절가 패치 완료 (2× ATR 확인)
+- [x] Kill-Switch VIX 로직 변경 완료 (30 차단 / 25~30 경고)
+- [x] 알림 포맷 수정 완료 (회사명 + 티커 + 거래소 제목)
+- [x] BRK-B 제외 (PBR 0.0 왜곡), LMT 제외 (구조적 고평가), PARA 제외 (상장폐지)
+- [x] 36개 종목 BPS 검증 완료 (PBR 이상값 없음 확인)
+- [x] KR 종목 pbr_min_value 계산 2010-01-01 이후 기준 적용
+- [x] backtest_runner.py --seed 실행 완료 (DynamoDB Seed Data 36종목 적재)
+- [x] AWS SAM 배포 완료 (ap-northeast-2)
+- [x] KR 11종목 + US 25종목 = 36종목 운영 중 (2026-04-26~)
 
 ---
 
