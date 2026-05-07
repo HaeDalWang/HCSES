@@ -20,6 +20,7 @@ logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 SECRET_NAME = os.environ.get("DISCORD_SECRET_NAME", "hcses/discord-webhook-url")
+SWING_SECRET_NAME = os.environ.get("SWING_DISCORD_SECRET_NAME", "hcses/swing-discord-webhook-url")
 
 
 def _log(level: str, message: str, **kwargs) -> None:
@@ -40,6 +41,10 @@ def handler(event: dict, context) -> dict:
 
 
 def _run(event: dict, context) -> dict:
+    # Tier 2 Swing 알림 (사전 포맷된 메시지)
+    if "swing_alert_message" in event:
+        return _handle_swing_alert(event)
+
     # TC-02: Secrets Manager 전역 캐싱
     secret = get_secret(SECRET_NAME)
     webhook_url = secret.get("webhook_url") or secret.get("DISCORD_WEBHOOK_URL")
@@ -104,3 +109,28 @@ def _run(event: dict, context) -> dict:
     else:
         _log("error", "alert_failed", ticker=ticker)
         return {"statusCode": 500, "body": "alert_failed"}
+
+
+def _handle_swing_alert(event: dict) -> dict:
+    """Tier 2 Swing 알림 처리 — 별도 Discord 채널로 발송."""
+    secret = get_secret(SWING_SECRET_NAME)
+    webhook_url = secret.get("webhook_url") or secret.get("DISCORD_WEBHOOK_URL")
+    if not webhook_url:
+        _log("error", "swing_webhook_url_missing")
+        return {"statusCode": 500, "body": "swing_webhook_url_missing"}
+
+    message = event.get("swing_alert_message")
+    if not message:
+        _log("error", "swing_alert_message_empty")
+        return {"statusCode": 400, "body": "swing_alert_message_empty"}
+    message = truncate_if_needed(message)
+
+    success = send_discord_alert(webhook_url, message)
+    ticker = event.get("ticker", "UNKNOWN")
+
+    if success:
+        _log("info", "swing_alert_sent", ticker=ticker)
+        return {"statusCode": 200, "body": "swing_alert_sent"}
+    else:
+        _log("error", "swing_alert_failed", ticker=ticker)
+        return {"statusCode": 500, "body": "swing_alert_failed"}

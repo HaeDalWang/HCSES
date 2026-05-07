@@ -25,8 +25,10 @@ STOCK_DAILY_TABLE = os.environ.get("STOCK_DAILY_TABLE", "hcses-stock-daily")
 MARKET_INDICATOR_TABLE = os.environ.get("MARKET_INDICATOR_TABLE", "hcses-market-indicator")
 
 # 종목 목록 (실운영 시 DynamoDB 설정 테이블 또는 환경변수로 관리)
+# Tier 1 + Tier 2 합집합 (DataCollector는 모든 대상 종목을 수집)
 TICKER_LIST: dict[str, list[str]] = {
     "KR": [
+        # Tier 1 (HCSES 밸류에이션)
         "005930.KS",  # 삼성전자
         "000660.KS",  # SK하이닉스
         "035420.KS",  # NAVER
@@ -38,46 +40,66 @@ TICKER_LIST: dict[str, list[str]] = {
         "005490.KS",  # POSCO홀딩스
         "033780.KS",  # KT&G
         "030200.KS",  # KT
+        # Tier 2 전용 (Swing 고변동)
+        "373220.KS",  # LG에너지솔루션
+        "006400.KS",  # 삼성SDI
+        "035720.KS",  # 카카오
+        "247540.KS",  # 에코프로비엠
+        "086520.KS",  # 에코프로
+        "003670.KS",  # 포스코퓨처엠
+        "042700.KS",  # 한미반도체
+        "012330.KS",  # 현대모비스
+        "034730.KS",  # SK
+        "028260.KS",  # 삼성물산
     ],
     "US": [
-        # 반도체/장비
+        # Tier 1 (HCSES 밸류에이션)
         "MU",     # Micron Technology
         "AMD",    # Advanced Micro Devices
         "INTC",   # Intel
         "QCOM",   # Qualcomm
         "AMAT",   # Applied Materials
         "LRCX",   # Lam Research
-        # 빅테크
         "META",   # Meta Platforms
-        # 금융
         "JPM",    # JPMorgan Chase
         "GS",     # Goldman Sachs
         "C",      # Citigroup
         "WFC",    # Wells Fargo
         "BAC",    # Bank of America
-        # 에너지
         "XOM",    # ExxonMobil
         "CVX",    # Chevron
         "OXY",    # Occidental Petroleum
         "DVN",    # Devon Energy
-        # 소재/철강
         "FCX",    # Freeport-McMoRan
         "NUE",    # Nucor
-        # 자동차/산업재
         "F",      # Ford
         "GM",     # General Motors
         "GE",     # GE Aerospace
         "CAT",    # Caterpillar
-        # 헬스케어
         "UNH",    # UnitedHealth Group
         "BMY",    # Bristol-Myers Squibb
-        # 통신/미디어
         "T",      # AT&T
+        # Tier 2 전용 (Swing 고변동)
+        "NVDA",   # NVIDIA
+        "TSLA",   # Tesla
+        "SOFI",   # SoFi Technologies
+        "COIN",   # Coinbase
+        "ROKU",   # Roku
+        "SNAP",   # Snap
+        "RIVN",   # Rivian
+        "MARA",   # Marathon Digital
+        "PLTR",   # Palantir
+        "SQ",     # Block
+        "DKNG",   # DraftKings
+        "SMCI",   # Super Micro Computer
+        "CRWD",   # CrowdStrike
+        "NET",    # Cloudflare
+        "ARM",    # ARM Holdings
     ],
 }
 
 TICKER_NAMES: dict[str, str] = {
-    # KR
+    # KR — Tier 1
     "005930.KS": "삼성전자",
     "000660.KS": "SK하이닉스",
     "035420.KS": "NAVER",
@@ -89,7 +111,18 @@ TICKER_NAMES: dict[str, str] = {
     "005490.KS": "POSCO홀딩스",
     "033780.KS": "KT&G",
     "030200.KS": "KT",
-    # US
+    # KR — Tier 2 전용
+    "373220.KS": "LG에너지솔루션",
+    "006400.KS": "삼성SDI",
+    "035720.KS": "카카오",
+    "247540.KS": "에코프로비엠",
+    "086520.KS": "에코프로",
+    "003670.KS": "포스코퓨처엠",
+    "042700.KS": "한미반도체",
+    "012330.KS": "현대모비스",
+    "034730.KS": "SK",
+    "028260.KS": "삼성물산",
+    # US — Tier 1
     "MU":    "Micron Technology",
     "AMD":   "Advanced Micro Devices",
     "INTC":  "Intel",
@@ -115,6 +148,22 @@ TICKER_NAMES: dict[str, str] = {
     "UNH":   "UnitedHealth Group",
     "BMY":   "Bristol-Myers Squibb",
     "T":     "AT&T",
+    # US — Tier 2 전용
+    "NVDA":  "NVIDIA",
+    "TSLA":  "Tesla",
+    "SOFI":  "SoFi Technologies",
+    "COIN":  "Coinbase",
+    "ROKU":  "Roku",
+    "SNAP":  "Snap",
+    "RIVN":  "Rivian",
+    "MARA":  "Marathon Digital",
+    "PLTR":  "Palantir",
+    "SQ":    "Block",
+    "DKNG":  "DraftKings",
+    "SMCI":  "Super Micro Computer",
+    "CRWD":  "CrowdStrike",
+    "NET":   "Cloudflare",
+    "ARM":   "ARM Holdings",
 }
 
 

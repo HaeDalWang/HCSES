@@ -234,6 +234,82 @@ Resources:
               Action: lambda:InvokeFunction
               Resource: !GetAtt AlertingEngineFunction.Arn
 
+# ── Tier 2: SwingAnalyzer ─────────────────────────────────────────────────────
+  SwingAnalyzerKR:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: hcses-swing-analyzer-kr
+      CodeUri: .
+      Handler: src/swing_analyzer/handler.handler
+      MemorySize: 256
+      Timeout: 300
+      Environment:
+        Variables:
+          MARKET: KR
+          ALERTING_ENGINE_ARN: !GetAtt AlertingEngineFunction.Arn
+          SWING_COOLDOWN_TABLE: !Ref SwingCooldownTable
+      Events:
+        KRSwing1: { Type: Schedule, Properties: { Schedule: "cron(0 1 ? * MON-FRI *)",  Input: '{"market":"KR"}' } }
+        KRSwing2: { Type: Schedule, Properties: { Schedule: "cron(0 3 ? * MON-FRI *)",  Input: '{"market":"KR"}' } }
+        KRSwing3: { Type: Schedule, Properties: { Schedule: "cron(0 5 ? * MON-FRI *)",  Input: '{"market":"KR"}' } }
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref StockDailyTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref MarketIndicatorTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SwingCooldownTable
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt AlertingEngineFunction.Arn
+
+  SwingAnalyzerUS:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: hcses-swing-analyzer-us
+      CodeUri: .
+      Handler: src/swing_analyzer/handler.handler
+      MemorySize: 256
+      Timeout: 300
+      Environment:
+        Variables:
+          MARKET: US
+          ALERTING_ENGINE_ARN: !GetAtt AlertingEngineFunction.Arn
+          SWING_COOLDOWN_TABLE: !Ref SwingCooldownTable
+      Events:
+        USSwing1: { Type: Schedule, Properties: { Schedule: "cron(0 14 ? * MON-FRI *)",  Input: '{"market":"US"}' } }
+        USSwing2: { Type: Schedule, Properties: { Schedule: "cron(0 17 ? * MON-FRI *)",  Input: '{"market":"US"}' } }
+        USSwing3: { Type: Schedule, Properties: { Schedule: "cron(0 19 ? * MON-FRI *)",  Input: '{"market":"US"}' } }
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref StockDailyTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref MarketIndicatorTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SwingCooldownTable
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt AlertingEngineFunction.Arn
+
+  SwingCooldownTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: hcses-swing-cooldown
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: ticker
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ticker
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
+
 # ── Unit 3: AlertingEngine ────────────────────────────────────────────────────
   AlertingEngineFunction:
     Type: AWS::Serverless::Function
@@ -246,11 +322,14 @@ Resources:
       Environment:
         Variables:
           DISCORD_SECRET_NAME: hcses/discord-webhook-url
+          SWING_DISCORD_SECRET_NAME: hcses/swing-discord-webhook-url
       Policies:
         - Statement:
             - Effect: Allow
               Action: secretsmanager:GetSecretValue
-              Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:hcses/discord-webhook-url*"
+              Resource:
+                - !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:hcses/discord-webhook-url*"
+                - !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:hcses/swing-discord-webhook-url*"
 
 # ── CloudWatch Dashboard ──────────────────────────────────────────────────────
   HCSESDashboard:
