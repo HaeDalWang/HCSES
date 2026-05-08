@@ -60,15 +60,31 @@ Momentum Pivot   30점  Price > MA20
 Supply-Demand    30점  외인 + 기관 순매수 누적 20일 음→양 전환
 ```
 
+### Tier 2: 단기 스윙 (score >= 70 시 알림)
+
+```
+기술적 반등    40점  RSI_prev <= 35 AND RSI_curr > 35
+                    OR RSI 2일 연속 상승 (< 40 구간)
+가격 지지      30점  볼린저 하단(20, 2σ) 터치 후 반등
+                    OR MA5 돌파 + MA20 미달
+거래량 확인    30점  Volume > 20일 평균 × 1.5
+                    OR 외인+기관 동시 순매수 (KR)
+```
+
+**출구 전략:** 목표가 = min(MA20, +10%), 손절가 = ATR×1.5, 타임컷 = 15거래일
+
+상세 설계: [docs/TIER2-SWING-DESIGN.md](./docs/TIER2-SWING-DESIGN.md)
+
 ### Global Kill-Switch
 
 ```
-VIX > 30          → 전 종목 score 강제 0 (알림 차단)
-25 < VIX <= 30    → score 유지 + ⚠️ 경고 문구 추가
-US10Y 변동률 > 3% → 전 종목 score 강제 0
+VIX > 30          → Tier 1 & 2 전면 차단
+25 < VIX <= 30    → Tier 1: 경고 문구만 / Tier 2: score × 0.7 패널티
+US10Y 변동률 > 3% → 전면 차단
+KRWUSD > BB upper → 전면 차단
 ```
 
-> **설계 의도:** VIX 25~30 구간(지정학적 불안 등)에서 PBR 저점 신호가 오히려 자주 발생합니다. 이 구간을 완전 차단하면 가장 좋은 신호를 놓칩니다. 경고 문구만 추가한 채 신호는 유지합니다.
+> **설계 의도:** VIX 25~30 구간에서 Tier 1은 장기 진입이라 기회이지만, Tier 2는 단기 반등 신뢰도가 떨어지므로 30% 할인합니다.
 
 ---
 
@@ -103,6 +119,26 @@ US10Y:   4.21% (정상)
 신호일:  2026-04-02 14:30 ET
 ```
 
+### Tier 2 알림 포맷 (별도 채널)
+
+```
+⚡ 단기 기회 | NVIDIA (NVDA) | US
+
+━━━━━━━━ 진입 근거 ━━━━━━━━
+현재가:         $105.20
+Swing Score:    100 / 100
+  └ 기술반등:   40 (RSI 33→38 탈출)
+  └ 가격지지:   30 (볼린저 하단 반등)
+  └ 거래량:     30 (2.1x 서프라이즈)
+
+━━━━━━━━ 출구 전략 ━━━━━━━━
+목표가:  $110.00  (min(MA20, +10%))  → +4.6%
+손절가:  $97.00   (현재가 - 1.5×ATR) → -7.8%
+타임컷:  15거래일
+
+⚠️ 단기 스윙 목적 — 목표가 도달 시 즉시 청산 권장
+```
+
 ---
 
 ## 아키텍처
@@ -112,20 +148,24 @@ EventBridge (Daily)
       │
       ▼
 DataCollector (Lambda)
-  ├─ yfinance / FinanceDataReader / pandas_datareader (FRED)
+  ├─ yfinance / FinanceDataReader (KR 수급)
   └─ DynamoDB (StockDailyTable, MarketIndicatorTable)
       │
-EventBridge (장 중 10회)
-      │
-      ▼
-QuantAnalyzer (Lambda)
-  ├─ Global Kill-Switch (VIX, US10Y)
-  ├─ Valuation Floor + Momentum Pivot + Supply-Demand (KR)
-  └─ Score >= 90 → AlertingEngine 호출
-      │
-      ▼
-AlertingEngine (Lambda)
-  └─ Discord Webhook 발송
+      ├────────────────────────────────────────┐
+      │                                        │
+EventBridge (장 중 10회)              EventBridge (장 중 3회)
+      │                                        │
+      ▼                                        ▼
+QuantAnalyzer (Lambda)               SwingAnalyzer (Lambda)
+  ├─ Global Kill-Switch                ├─ Kill-Switch (공유)
+  ├─ Valuation + Momentum             ├─ 기술반등 + 가격지지 + 거래량
+  │   + Supply-Demand (KR)             ├─ VIX 25~30 패널티 (×0.7)
+  └─ Score >= 90 → 🚨 Tier 1          └─ Score >= 70 → ⚡ Tier 2
+      │                                        │
+      ▼                                        ▼
+AlertingEngine (Lambda) ◄──────────────────────┘
+  ├─ Tier 1 → Discord #hcses-alert (고확신 진입)
+  └─ Tier 2 → Discord #hcses-swing (단기 기회)
 
 EventBridge (매주 토요일)
       │
@@ -136,45 +176,27 @@ StatsUpdater (Lambda)
 
 ---
 
-## 운영 종목 (36개)
+## 운영 종목 (총 61개)
+
+### Tier 1 전용 (11 KR + 25 US = 36개)
+
+PBR 역사적 변동폭이 큰 사이클주·가치주 위주. [TICKERS.md](./TICKERS.md) 참조.
+
+### Tier 2 전용 (10 KR + 15 US = 25개, 일부 Tier 1과 중복)
+
+고변동·고유동성 종목. 기술적 과매도 후 빠른 반등이 빈번한 종목 위주.
 
 ```python
-TICKER_LIST = {
-    "KR": [
-        "005930.KS",  # 삼성전자
-        "000660.KS",  # SK하이닉스
-        "035420.KS",  # NAVER
-        "005380.KS",  # 현대차
-        "000270.KS",  # 기아
-        "105560.KS",  # KB금융
-        "010950.KS",  # S-Oil
-        "329180.KS",  # HD현대중공업
-        "005490.KS",  # POSCO홀딩스
-        "033780.KS",  # KT&G
-        "030200.KS",  # KT
-    ],
-    "US": [
-        # 반도체/장비
-        "MU", "AMD", "INTC", "QCOM", "AMAT", "LRCX",
-        # 빅테크
-        "META",
-        # 금융
-        "JPM", "GS", "C", "WFC", "BAC",
-        # 에너지
-        "XOM", "CVX", "OXY", "DVN",
-        # 소재/철강
-        "FCX", "NUE",
-        # 자동차/산업재
-        "F", "GM", "GE", "CAT",
-        # 헬스케어
-        "UNH", "BMY",
-        # 통신
-        "T",
-    ]
+# Tier 2 전용 종목 (기존 Tier 1 외 추가분)
+SWING_TICKERS = {
+    "KR": ["373220.KS", "006400.KS", "035720.KS", "247540.KS", "086520.KS",
+           "003670.KS", "042700.KS", "012330.KS", "034730.KS", "028260.KS"],
+    "US": ["NVDA", "TSLA", "SOFI", "COIN", "ROKU", "SNAP", "RIVN", "MARA",
+           "PLTR", "SQ", "DKNG", "SMCI", "CRWD", "NET", "ARM"],
 }
 ```
 
-**종목 선정 기준:** PBR 역사적 변동폭이 큰 사이클주 위주. 방어주/빅테크는 PBR이 역사적 저점에 오는 경우가 극히 드물어 이 시스템과 궁합이 맞지 않습니다. 종목 추가/제거 기준은 [TICKERS.md](./TICKERS.md) 참조.
+종목 선정 기준: [TICKERS.md](./TICKERS.md) 참조.
 
 ---
 
@@ -196,12 +218,16 @@ TICKER_LIST = {
 hcses/
 ├── src/
 │   ├── data_collector/      # Unit 1: 일별 데이터 수집
-│   ├── quant_analyzer/      # Unit 2: 스코어링 엔진
-│   ├── alerting_engine/     # Unit 3: Discord 알림
+│   ├── quant_analyzer/      # Unit 2: Tier 1 스코어링 엔진
+│   ├── swing_analyzer/      # Unit 5: Tier 2 단기 스윙 분석
+│   ├── alerting_engine/     # Unit 3: Discord 알림 (Tier 1 & 2 공용)
 │   ├── stats_updater/       # 주간 PBR 통계 재계산
 │   ├── backtesting/         # Unit 4: 백테스팅 CLI
 │   └── shared/              # 공유 모듈
 ├── tests/unit/              # 단위 테스트
+├── scripts/                 # 운영 스크립트 (백필 등)
+├── docs/                    # 상세 설계 문서
+│   └── TIER2-SWING-DESIGN.md
 ├── template.yaml            # AWS SAM
 ├── TECHNICAL.md             # 기술 상세 설계 문서
 ├── TICKERS.md               # 운영 종목 목록 및 편입 사유
@@ -219,13 +245,15 @@ hcses/
 |--------|-----------|-------------|
 | Lambda (DataCollector KR/US) | 2회/일 × 22일 × 512MB × 480초 | $0.60 |
 | Lambda (QuantAnalyzer KR/US) | 20회/일 × 22일 × 256MB × 180초 | $0.85 |
-| Lambda (AlertingEngine) | ~2회/월 × 128MB × 5초 | $0.00 |
+| Lambda (SwingAnalyzer KR/US) | 6회/일 × 22일 × 256MB × 180초 | $0.40 |
+| Lambda (AlertingEngine) | ~5회/월 × 128MB × 5초 | $0.00 |
 | Lambda (StatsUpdater) | 4회/월 × 256MB × 300초 | $0.01 |
 | DynamoDB (읽기/쓰기/스토리지) | ~2,500 WCU + ~40,000 RCU + 0.5GB | $0.18 |
 | EventBridge | ~500 이벤트/월 (무료 한도 내) | $0.00 |
 | Secrets Manager | 1 시크릿 × $0.40 | $0.40 |
 | CloudWatch Logs | 수집 ~400MB + 보관 ~1.2GB (90일) | $0.43 |
-| **합계** | | **~$2.47/월** |
+| DynamoDB (SwingCooldown) | 미미 | $0.01 |
+| **합계** | | **~$2.90/월** |
 
 > 종목 수 증가 시 Lambda 실행 시간과 DynamoDB I/O가 선형 증가합니다.
 > 100종목 기준 약 $4~5/월, 200종목 기준 약 $8~10/월로 추정됩니다.

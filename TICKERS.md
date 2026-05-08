@@ -1,6 +1,15 @@
 # 모니터링 대상 종목 (Tickers)
 
-본 시스템은 Valuation Floor(역사적 PBR 하단) 및 Momentum Pivot 로직과의 수학적 정합성이 검증된 36개 종목으로 운영됩니다.
+본 시스템은 2계층(Tier)으로 운영됩니다:
+
+- **Tier 1** (36종목): Valuation Floor + Momentum Pivot — PBR 역사적 저점 + 기술적 반등 동시 충족 시 고확신 진입 알림
+- **Tier 2** (25종목): Short-Swing — 기술적 과매도 후 단기 반등 기회 포착 (일부 Tier 1과 중복)
+
+---
+
+# Tier 1: 고확신 진입 종목 (36개)
+
+Valuation Floor(역사적 PBR 하단) 및 Momentum Pivot 로직과의 수학적 정합성이 검증된 종목입니다.
 오탐(False Positive)과 중복 알람을 방지하기 위해 종목 간 상관관계를 배제하고 사이클 및 가치주 중심으로 최적화했습니다.
 
 ---
@@ -95,7 +104,64 @@
 
 ---
 
+---
+
+# Tier 2: 단기 스윙 종목 (25개)
+
+선정 기준: 베타 > 1.3, 일평균 거래량 풍부, ATR/Close > 2.5%, 평균회귀 경향 강한 종목.
+
+## 한국 시장 (KR) — 15종목
+
+| 티커 | 종목명 | 편입 사유 |
+|---|---|---|
+| 005930.KS | 삼성전자 | (Tier 1 겸용) 유동성 최고, 지지선 반등 명확 |
+| 000660.KS | SK하이닉스 | (Tier 1 겸용) 반도체 사이클, 단기 반등 빈번 |
+| 035420.KS | NAVER | (Tier 1 겸용) 기술주 센티먼트, 기관 매수 패턴 |
+| 005380.KS | 현대차 | (Tier 1 겸용) 자동차 사이클, 외인 매매 패턴 명확 |
+| 000270.KS | 기아 | (Tier 1 겸용) 위와 동일 |
+| 373220.KS | LG에너지솔루션 | 베타 높음, 배터리 센티먼트 급변 |
+| 006400.KS | 삼성SDI | 2차전지, 과매도 시 외인 저가매수 패턴 |
+| 035720.KS | 카카오 | 고베타, 센티먼트 드리븐, RSI 35 이하 빈번 |
+| 247540.KS | 에코프로비엠 | 극단적 변동성, 단기 반등 폭 큼 |
+| 086520.KS | 에코프로 | 위와 동일 섹터, 테마 동조 |
+| 003670.KS | 포스코퓨처엠 | 2차전지 소재, 사이클 급변 |
+| 042700.KS | 한미반도체 | AI 테마, 고변동성 |
+| 012330.KS | 현대모비스 | 자동차 부품, 기술적 지지 반등 |
+| 034730.KS | SK | 지주 할인 축소/확대 반복 |
+| 028260.KS | 삼성물산 | 지배구조 이벤트 + 기술적 지지 반등 |
+
+## 미국 시장 (US) — 20종목
+
+| 티커 | 종목명 | 편입 사유 |
+|---|---|---|
+| NVDA | NVIDIA | 베타 ~1.7, 거래량 폭발적, 과매도 시 반등 빠름 |
+| TSLA | Tesla | 베타 ~2.0, 변동성 최상위, 단기 반등 패턴 빈번 |
+| AMD | Advanced Micro Devices | (Tier 1 겸용) 베타 ~1.6, 스윙 트레이더 선호 |
+| MU | Micron Technology | (Tier 1 겸용) 사이클 극심, RSI 35 이하 빈번 |
+| SOFI | SoFi Technologies | 베타 ~1.8, 높은 변동성, 유동성 풍부 |
+| COIN | Coinbase | 베타 ~2.5, 극단적 과매도→반등 패턴 |
+| ROKU | Roku | 베타 ~1.8, 실적 시즌 급락→반등 빈번 |
+| SNAP | Snap | 베타 ~1.5, 센티먼트 급변, 기술적 반등 뚜렷 |
+| RIVN | Rivian | 베타 ~2.0, 고변동 성장주 |
+| MARA | Marathon Digital | 베타 ~3.0, 극단적 변동 (리스크 높음) |
+| PLTR | Palantir | 베타 ~1.6, 모멘텀 급변, 단기 반등 강함 |
+| SQ | Block | 베타 ~1.7, 과매도→반등 패턴 선명 |
+| DKNG | DraftKings | 베타 ~1.6, 센티먼트 드리븐 |
+| FCX | Freeport-McMoRan | (Tier 1 겸용) 원자재 사이클, 단기 반등 빈번 |
+| XOM | ExxonMobil | (Tier 1 겸용) 유가 급변 시 과매도 진입 |
+| BAC | Bank of America | (Tier 1 겸용) 금리 이벤트 시 급락→반등 |
+| SMCI | Super Micro Computer | 베타 ~2.5, 급등락 심함, 유동성 좋음 |
+| CRWD | CrowdStrike | 베타 ~1.4, 이벤트 드리븐 급락→회복 |
+| NET | Cloudflare | 베타 ~1.5, 성장주 센티먼트 반영 빠름 |
+| ARM | ARM Holdings | 베타 ~1.8, IPO 이후 변동성 큼 |
+
+> **Tier 2 부적합 (Tier 1 전용):** T, UNH, KT&G, KT, S-Oil — 변동성 너무 낮아 15일 내 +10% 비현실적
+
+---
+
 ## 종목 추가 방법
+
+### Tier 1 종목 추가
 
 `src/data_collector/handler.py`의 `TICKER_LIST`와 `TICKER_NAMES`에 동시 추가 후,
 신규 종목 Seed Data 생성 필수:
@@ -115,6 +181,19 @@ PYTHONPATH=. python -m src.backtesting.backtest_runner \
 ```
 
 이후 `sam build --use-container && sam deploy` 재배포.
+
+### Tier 2 종목 추가
+
+1. `src/swing_analyzer/tickers.py`의 `SWING_TICKER_LIST`와 `SWING_TICKER_NAMES`에 추가
+2. `src/data_collector/handler.py`의 `TICKER_LIST`와 `TICKER_NAMES`에도 추가 (DataCollector가 수집해야 함)
+3. 백필 스크립트로 과거 30일 데이터 적재:
+
+```bash
+# 스크립트의 NEW_TICKERS_US 또는 NEW_TICKERS_KR에 추가 후 실행
+python3 scripts/backfill_swing_tickers.py
+```
+
+4. `sam build --use-container && sam deploy` 재배포
 
 ## 제외 종목 이력
 

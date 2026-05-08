@@ -108,15 +108,29 @@ SAM configuration environment: default
 ## Step 7: Discord Webhook 설정
 
 ### 7-1. Discord 서버에서 Webhook 생성
-1. Discord 서버 → 채널 설정 → 연동 → 웹후크
+
+**Tier 1 채널** (고확신 진입):
+1. Discord 서버 → `#hcses-alert` 채널 설정 → 연동 → 웹후크
 2. "새 웹후크" 클릭 → 이름: `HCSES Alert`
+3. 웹후크 URL 복사
+
+**Tier 2 채널** (단기 스윙):
+1. Discord 서버 → `#hcses-swing` 채널 설정 → 연동 → 웹후크
+2. "새 웹후크" 클릭 → 이름: `HCSES Swing`
 3. 웹후크 URL 복사
 
 ### 7-2. AWS Secrets Manager에 저장
 ```bash
+# Tier 1 (고확신 진입)
 aws secretsmanager create-secret \
   --name hcses/discord-webhook-url \
-  --secret-string '{"webhook_url":"여기에_복사한_웹후크_URL_붙여넣기"}' \
+  --secret-string '{"webhook_url":"Tier1_웹후크_URL"}' \
+  --region ap-northeast-2
+
+# Tier 2 (단기 스윙)
+aws secretsmanager create-secret \
+  --name hcses/swing-discord-webhook-url \
+  --secret-string '{"webhook_url":"Tier2_웹후크_URL"}' \
   --region ap-northeast-2
 ```
 
@@ -379,6 +393,8 @@ aws events list-rules --name-prefix hcses --region ap-northeast-2
 - US DataCollector: 매일 06:30 KST (21:30 UTC)
 - KR QuantAnalyzer: 장 중 10회 (09:00~15:20 KST)
 - US QuantAnalyzer: 장 중 10회 (EDT 09:30~16:00)
+- **KR SwingAnalyzer: 장 중 3회 (10:00, 12:00, 14:00 KST)**
+- **US SwingAnalyzer: 장 중 3회 (23:00, 02:00, 04:00 KST)**
 - StatsUpdater: 매주 토요일 09:00 KST (00:00 UTC)
 
 ---
@@ -400,6 +416,15 @@ aws events list-rules --name-prefix hcses --region ap-northeast-2
 - CloudWatch에서 `pbr_missing` WARNING 로그 확인
 - KR 종목: FinanceDataReader fallback 동작 여부 확인
 
+### Tier 2 알람이 전혀 오지 않음
+- 정상: 강세장에서는 RSI 35 이하 진입이 드물어 알림 빈도 낮음
+- CloudWatch에서 `swing_analysis_complete` 로그 확인 (total_score 값 확인)
+- 종목별 RSI가 35 이상이면 조건 미충족 (설계대로 동작)
+
+### Tier 2 신규 종목 데이터 부족
+- 백필 스크립트 실행: `python3 scripts/backfill_swing_tickers.py`
+- MA20/볼린저 계산에 최소 20거래일 필요
+
 ---
 
 ## 스택 삭제 (정리)
@@ -413,6 +438,11 @@ Secrets Manager는 별도 삭제가 필요합니다:
 ```bash
 aws secretsmanager delete-secret \
   --secret-id hcses/discord-webhook-url \
+  --force-delete-without-recovery \
+  --region ap-northeast-2
+
+aws secretsmanager delete-secret \
+  --secret-id hcses/swing-discord-webhook-url \
   --force-delete-without-recovery \
   --region ap-northeast-2
 ```

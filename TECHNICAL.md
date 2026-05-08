@@ -10,6 +10,8 @@ flowchart TD
         T3["KR Analyzer<br/>장 중 10회"]
         T4["US Analyzer<br/>장 중 10회"]
         T5["StatsUpdater<br/>매주 토요일"]
+        T6["KR SwingAnalyzer<br/>장 중 3회"]
+        T7["US SwingAnalyzer<br/>장 중 3회"]
     end
 
     subgraph DC["📥 DataCollector Lambda"]
@@ -38,10 +40,20 @@ flowchart TD
         AE4["Discord 발송<br/>3회 재시도"]
     end
 
+    subgraph SA["⚡ SwingAnalyzer Lambda"]
+        SA1["시장 시간 검증"]
+        SA2["Kill-Switch + VIX 패널티"]
+        SA3["파생 지표 계산<br/>MA5, BB, Vol MA20"]
+        SA4["Tier 2 스코어링"]
+        SA5["score >= 70?"]
+        SA6["쿨다운 기록"]
+    end
+
     subgraph DB["💾 DynamoDB"]
         STD["StockDailyTable<br/>TTL 180일"]
         MIT["MarketIndicatorTable<br/>TTL 180일"]
         STS["StockStatsTable<br/>영구 보존"]
+        SCD["SwingCooldownTable<br/>TTL 30일"]
     end
 
     T1 & T2 --> DC1
@@ -66,6 +78,20 @@ flowchart TD
     AE1 --> AE2 --> AE3 --> AE4
     AE4 -->|성공| QA6
     AE4 -->|실패| PENDING["PENDING 유지<br/>다음 실행 재시도"]
+
+    T6 & T7 --> SA1
+    SA1 -->|장 중| SA2
+    SA1 -->|장 외| SKIP4["graceful exit"]
+    SA2 -->|통과| SA3
+    SA2 -->|Kill-Switch| SKIP5["차단"]
+    SA3 --> SA4 --> SA5
+    SA5 -->|Yes| AE1
+    SA5 -->|No| SKIP6["다음 종목"]
+    AE4 -->|Tier2 성공| SA6
+
+    SA3 -.->|읽기| STD
+    SA4 -.->|읽기| MIT
+    SA6 -.->|쓰기| SCD
 
     T5 --> STS
 
@@ -164,7 +190,76 @@ KRW/USD:
 볼린저 상단 = MA20(KRW/USD) + 2 × σ(KRW/USD, 20일)
 ```
 
-### 손절가 (ATR 기반)
+---
+
+## Tier 2 스코어링 수식 (SwingAnalyzer)
+
+### 시장 공통 가중치
+
+```
+기술반등(40) + 가격지지(30) + 거래량(30) = 100점
+알람 임계값: total_score >= 70
+VIX 25~30: total_score × 0.7 패널티
+```
+
+### 기술적 반등 초기 (40점)
+
+```
+조건 A: RSI_prev <= 35  AND  RSI_curr > 35
+
+조건 B: RSI_curr < 40
+        AND RSI_curr > RSI_prev
+        AND RSI_prev > RSI_prev_prev (2일 연속 상승)
+
+A 또는 B 중 하나 충족 시: 40점
+```
+
+### 가격 지지 확인 (30점)
+
+```
+조건 A (볼린저 하단 반등):
+  Low_prev <= BB_lower(20, 2σ)
+  AND Close_curr > BB_lower
+
+조건 B (단기 이평 회복):
+  Close_prev < MA5
+  AND Close_curr > MA5
+  AND Close_curr < MA20
+
+A 또는 B 중 하나 충족 시: 30점
+```
+
+### 거래량 확인 (30점)
+
+```
+조건 A (거래량 서프라이즈):
+  Volume_curr > Volume_MA20 × 1.5
+
+조건 B (KR 수급 — US 미적용):
+  foreign_net_buy > 0  AND  institution_net_buy > 0 (당일 동시 순매수)
+
+A 또는 B 중 하나 충족 시: 30점
+```
+
+### Tier 2 출구 전략
+
+```
+목표가 = min(MA20, 진입가 × 1.10)
+손절가 = 진입가 - ATR(14) × 1.5   (ATR 없으면 진입가 × 0.95)
+타임컷 = 15거래일
+```
+
+### Tier 2 안전장치
+
+```
+쿨다운:    동일 종목 알림 후 10일간 재알림 차단
+일 상한:   하루 최대 3종목 알림 (점수 높은 순)
+Kill-Switch: Tier 1과 공유 (VIX > 30, US10Y > 3%, KRWUSD > BB upper)
+```
+
+---
+
+### Tier 1 손절가 (ATR 기반)
 
 ```
 손절가 = 현재가 - (ATR(14) × 2.0)
